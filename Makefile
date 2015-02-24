@@ -9,10 +9,10 @@ CFLAGS+=-MMD  # generate dependency .d files
 LDLIBS=
 LDFLAGS=
 
-SRCS=src/main.c
+SRCS=src/main.c src/network.c
 TARGETS=src/main
 
-src/main: src/main.o
+src/main: src/main.o src/network.o
 
 TEST_SUITE=src/foo-test
 

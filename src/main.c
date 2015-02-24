@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include "network.h"
 
 int main() {
-    printf("hello world\n");
+    printf("Server started\n");
+    network_start();
 }
