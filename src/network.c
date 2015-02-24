@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -11,6 +12,8 @@
 int start_listening();
 int make_nonblock(int);
 int start_epoll(int);
+int accept_connection(int, int);
+int read_for_client(client_t *client);
 
 int network_start() {
     int listen_sock = start_listening();
@@ -70,9 +73,23 @@ int make_nonblock(int sockfd) {
     return 1;
 }
 
+client_t *client_create(int client_fd) {
+    client_t *client = malloc(sizeof(client_t));
+    if (client != NULL) {
+        client->client_fd = client_fd;
+        client->buf_used = 0;
+    }
+    return client;
+}
+
+void client_free(client_t *client) {
+    close(client->client_fd);
+    free(client);
+}
+
 int start_epoll(int listen_sock) {
     struct epoll_event ev, events[NETWORK_MAX_EVENTS];
-    int conn_sock, nfds, epollfd;
+    int nfds, epollfd;
 
     epollfd = epoll_create1(0);
     if (epollfd == -1) {
@@ -96,37 +113,93 @@ int start_epoll(int listen_sock) {
 
         for (int n = 0; n < nfds; ++n) {
             if (events[n].data.fd == listen_sock) {
-                struct sockaddr_in6 cliaddr;
-                socklen_t addrlen = sizeof(cliaddr);
-                conn_sock = accept(listen_sock,
-                        (struct sockaddr *) &cliaddr, &addrlen);
-                if (conn_sock == -1) {
-                    perror("accept");
+                if (accept_connection(epollfd, listen_sock) < 0) {
                     return -1;
                 }
-                make_nonblock(conn_sock);
-                ev.events = EPOLLIN;
-                ev.data.fd = conn_sock;
-                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_sock,
-                            &ev) == -1) {
-                    perror("epoll_ctl: conn_sock");
+            } else if(events[n].events & EPOLLIN) {
+                client_t *client = events[n].data.ptr;
+                if (read_for_client(client) < 0) {
                     return -1;
                 }
             } else {
-                char buf[81];
-                int read_fd = events[n].data.fd;
-                int n = read(read_fd, buf, 80);
-                if (n > 0) {
-                    buf[n] = '\0';
-                    printf("Read data: %s\n", buf); 
-                } else if (n == 0) {
-                    printf("conn closed\n");
-                    close(events[n].data.fd);
-                } else {
-                    perror("read ");
-                    close(events[n].data.fd);
-                }
+                // not from listen socket and not about reading? must be a closed socket
+                client_t *client = events[n].data.ptr;
+                client_free(client);  
             }
         }
     }
+}
+
+int accept_connection(int epollfd, int listen_sock) {
+    struct epoll_event ev; 
+    struct sockaddr_in6 cliaddr;
+    socklen_t addrlen = sizeof(cliaddr);
+    int conn_sock = accept(listen_sock, (struct sockaddr *) &cliaddr, &addrlen);
+    if (conn_sock == -1) {
+        perror("accept");
+        return -1;
+    }
+    make_nonblock(conn_sock);
+    ev.events = EPOLLIN;
+    ev.data.ptr = client_create(conn_sock);
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_sock,
+                &ev) == -1) {
+        perror("epoll_ctl: conn_sock");
+        return -1;
+    }
+    return 1;
+}
+
+void dump_buf(client_t *client) {
+    printf("buf: '");
+    for (int i = 0; i < client->buf_used; i++) {
+        if (client->buf[i] == '\n') 
+            printf("\\n");
+        else
+            printf("%c", client->buf[i]);
+    }
+    printf("'\n");
+}
+
+// tries to read packets for the given client
+int read_for_client(client_t *client) {
+    int n = read(client->client_fd, &client->buf[client->buf_used], NETWORK_CLIENT_BUF - client->buf_used);
+    if (n > 0) {
+        client->buf_used += n;
+
+        dump_buf(client);
+        
+        int packet_start = 0;
+        int packet_size = 1;
+        for (int i = 0; i < client->buf_used; i++) {
+            if (packet_size > NETWORK_MAX_PACKET_SIZE) {
+                printf("Client tried to send a packet too long!\n");
+                client_free(client);
+                return 1;
+            }
+            if (client->buf[i] == '\n') {
+                client->buf[i] = '\0';
+                printf("Got packet: %s\n", &client->buf[packet_start]);     
+                packet_start = i + 1;
+                packet_size = 1;
+            } 
+            packet_size++;
+        }
+        // copy the rest to the beginning of the buffer
+        // at this point, packet_size contains length of the broken packet at end
+        if (packet_start != 0 && client->buf_used - packet_start > 0) {
+            memcpy(&client->buf, &client->buf[packet_start], client->buf_used - packet_start);
+        }
+        client->buf_used = client->buf_used - packet_start;
+        dump_buf(client);
+    } else if (n == 0) {
+        printf("conn closed\n");
+        client_free(client);
+    } else {
+        perror("read ");
+        // TODO: check that errno isn't EAGAIN or EWOULDBLOCK 
+        // (though in theory this shouldn't be possible)
+        client_free(client);
+    }
+    return 1; 
 }
