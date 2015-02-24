@@ -3,5 +3,5 @@
 
 int main() {
     printf("Server started\n");
-    network_start();
+    return network_start();
 }
