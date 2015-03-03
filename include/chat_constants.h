@@ -1,5 +1,5 @@
-#ifndef CONSTANTS_H
-#define CONSTANTS_H
+#ifndef CHAT_CONSTANTS_H
+#define CHAT_CONSTANTS_H
 
 #define NICKNAME_LENGTH 10
 #define CHANNEL_LENGTH 10
