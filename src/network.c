@@ -79,6 +79,7 @@ client_t *client_create(int client_fd) {
     if (client != NULL) {
         client->client_fd = client_fd;
         client->buf_used = 0;
+        memset(&client->nickname, 0, NICKNAME_LENGTH);
     }
     return client;
 }
@@ -142,7 +143,7 @@ int accept_connection(int epollfd, int listen_sock) {
     }
     make_nonblock(conn_sock);
     ev.events = EPOLLIN;
-    ev.data.ptr = client_create(conn_sock);
+    ev.data.ptr = client_create(conn_sock); // TODO: client_create can return NULL
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_sock,
                 &ev) == -1) {
         perror("epoll_ctl: conn_sock");
