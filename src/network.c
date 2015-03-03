@@ -151,25 +151,12 @@ int accept_connection(int epollfd, int listen_sock) {
     return 1;
 }
 
-void dump_buf(client_t *client) {
-    printf("buf: '");
-    for (int i = 0; i < client->buf_used; i++) {
-        if (client->buf[i] == '\n') 
-            printf("\\n");
-        else
-            printf("%c", client->buf[i]);
-    }
-    printf("'\n");
-}
-
 // tries to read packets for the given client
 int read_for_client(client_t *client) {
     int n = read(client->client_fd, &client->buf[client->buf_used], NETWORK_CLIENT_BUF - client->buf_used);
     if (n > 0) {
         client->buf_used += n;
 
-        dump_buf(client);
-        
         int packet_start = 0;
         int packet_size = 1;
         for (int i = 0; i < client->buf_used; i++) {
@@ -193,7 +180,6 @@ int read_for_client(client_t *client) {
             memcpy(&client->buf, &client->buf[packet_start], client->buf_used - packet_start);
         }
         client->buf_used = client->buf_used - packet_start;
-        dump_buf(client);
     } else if (n == 0) {
         printf("conn closed\n");
         client_free(client);
