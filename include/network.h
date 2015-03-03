@@ -17,6 +17,10 @@ typedef struct {
 	char nickname[NICKNAME_LENGTH];
 } client_t;
 
+// inits the network socket and starts running the event loop
 int network_start();
+
+// frees data associated with a client_t and closes the related fd
+void client_free(client_t *client);
 
 #endif

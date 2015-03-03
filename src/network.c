@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "network.h"
+#include "packets.h"
 
 int start_listening();
 int make_nonblock(int);
@@ -179,7 +180,8 @@ int read_for_client(client_t *client) {
             }
             if (client->buf[i] == '\n') {
                 client->buf[i] = '\0';
-                printf("Got packet: %s\n", &client->buf[packet_start]);     
+                // pass the packet to the next layer to handle
+                handle_packet(client, &client->buf[packet_start]);
                 packet_start = i + 1;
                 packet_size = 1;
             } 
