@@ -192,3 +192,19 @@ int read_for_client(client_t *client) {
     }
     return 1; 
 }
+
+int network_send(client_t *client, const void *data, const size_t size) {
+    size_t bytes_sent = 0;
+    while (bytes_sent < size) {
+        int n = write(client->client_fd, data, size);
+        if (n < 0) {
+            perror("write"); 
+            client_free(client); 
+            return -1;
+        } else if (n == 0) {
+            return -1;
+        }
+        bytes_sent += n;
+    }
+    return 1;
+}

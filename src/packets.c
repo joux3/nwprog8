@@ -30,6 +30,9 @@ void handle_unregisted_packet(client_t *client, char *packet) {
             if (nicklen > 0 && nicklen < NICKNAME_LENGTH) {
                 strncpy(client->nickname, nickname, NICKNAME_LENGTH);
                 printf("Registered nickname: %s\n", nickname);
+                char packet[256];
+                int n = snprintf(packet, 256, "MOTD Welcome to da server, %s!\n", nickname);
+                network_send(client, packet, n);
             } else {
                 printf("Unregistered user illegal nick '%s', dropping\n", nickname);
                 client_free(client);
