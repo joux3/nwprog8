@@ -5,17 +5,21 @@
 void handle_unregisted_packet(client_t *client, char *packet);
 void handle_registed_packet(client_t *client, char *packet);
 
+int is_registered(client_t *client) {
+    return client->nickname[0] != '\0';
+}
+
 void handle_packet(client_t *client, char *packet) {
-    if (client->nickname[0] == '\0') {
-        handle_unregisted_packet(client, packet);
-    } else {
+    if (is_registered(client)) {
         handle_registed_packet(client, packet);        
+    } else {
+        handle_unregisted_packet(client, packet);
     }
 }
 
 void handle_unregisted_packet(client_t *client, char *packet) {
     char *command = strtok(packet, " ");
-    if (strcmp(command, "NICK") == 0) {
+    if (command != NULL && strcmp(command, "NICK") == 0) {
         // TODO add check if nick is already taken
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
@@ -39,4 +43,12 @@ void handle_unregisted_packet(client_t *client, char *packet) {
 
 void handle_registed_packet(client_t *client, char *packet) {
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
+}
+
+void handle_disconnect(client_t *client) {
+    if (is_registered(client)) {
+        printf("Registered user '%s' disconnected\n", client->nickname);
+    } else {
+        printf("Unregistered client disconnected\n");
+    }
 }

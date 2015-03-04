@@ -85,6 +85,7 @@ client_t *client_create(int client_fd) {
 }
 
 void client_free(client_t *client) {
+    handle_disconnect(client); 
     close(client->client_fd);
     free(client);
 }
@@ -182,7 +183,6 @@ int read_for_client(client_t *client) {
         }
         client->buf_used = client->buf_used - packet_start;
     } else if (n == 0) {
-        printf("conn closed\n");
         client_free(client);
     } else {
         perror("read ");
