@@ -69,21 +69,25 @@ int handle_unregistered_packet(client_t *client, char *packet) {
 int handle_registered_packet(client_t *client, char *packet) {
     char *command = strtok(packet, " ");
     if (command != NULL) {
-        if (strcmp(command, "MSG") == 0) {
-            char *destination = strtok(NULL, " ");
-            if (destination != NULL) {
-                char *msg = strtok(NULL, "\n");
-                if (msg != NULL) {
-                    printf("Message from '%s' to '%s': %s\n", client->nickname, destination, msg);
-                    if (cfuhash_exists(nicknames_hash, destination)) {
-                        char packet[255];
-                        snprintf(packet, 255, "MSG %s %s %s", client->nickname, destination, msg);
-                        send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
-                    } else {
-                        send_packet(client, "CMDREPLY Nickname not found");
-                    }
-                }
-            }
+        if (strcmp(command, "MSG") != 0) {
+            return 0;
+        }
+        char *destination = strtok(NULL, " ");
+        if (destination == NULL) {
+            return 0;
+        }
+        char *msg = strtok(NULL, "\n");
+        if (msg == NULL) {
+            return 0;
+        }
+
+        printf("Message from '%s' to '%s': %s\n", client->nickname, destination, msg);
+        if (cfuhash_exists(nicknames_hash, destination)) {
+            char packet[255];
+            snprintf(packet, 255, "MSG %s %s %s", client->nickname, destination, msg);
+            send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
+        } else {
+            send_packet(client, "CMDREPLY Nickname not found");
         }
         return 0;
     }
