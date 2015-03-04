@@ -305,6 +305,7 @@ unlock_hash(cfuhash_table_t *ht) {
 
 int
 cfuhash_lock(cfuhash_table_t *ht) {
+    ht = ht;
 #ifdef HAVE_PTHREAD_H
 	pthread_mutex_lock(&ht->mutex);
 #endif
@@ -313,6 +314,7 @@ cfuhash_lock(cfuhash_table_t *ht) {
 
 int
 cfuhash_unlock(cfuhash_table_t *ht) {
+    ht = ht;
 #ifdef HAVE_PTHREAD_H
 	pthread_mutex_unlock(&ht->mutex);
 #endif

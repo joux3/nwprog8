@@ -3,6 +3,7 @@
 
 #include "network.h"
 
+void init_packets();
 // handles a packet for the given client
 // handle_packet MUST NOT assume that any data pointed by
 // packet will be valid after the function call

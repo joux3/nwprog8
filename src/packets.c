@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <string.h>
 #include "packets.h"
+#include "cfuhash.h"
+
+cfuhash_table_t *nicknames_hash;
+void init_packets() {
+   nicknames_hash = cfuhash_new_with_initial_size(1000); 
+}
 
 void handle_unregisted_packet(client_t *client, char *packet);
 void handle_registed_packet(client_t *client, char *packet);
@@ -33,11 +39,18 @@ void handle_unregisted_packet(client_t *client, char *packet) {
         } else {
             int nicklen = strlen(nickname);
             if (nicklen > 0 && nicklen < NICKNAME_LENGTH) {
-                strncpy(client->nickname, nickname, NICKNAME_LENGTH);
-                printf("Registered nickname: %s\n", nickname);
-                char packet[256];
-                int n = snprintf(packet, 256, "MOTD Welcome to da server, %s!\n", nickname);
-                network_send(client, packet, n);
+                if (!cfuhash_exists(nicknames_hash, nickname)) {
+                    strncpy(client->nickname, nickname, NICKNAME_LENGTH);
+                    printf("Registered nickname: %s\n", nickname);
+                    char packet[256];
+                    int n = snprintf(packet, 256, "MOTD Welcome to da server, %s!\n", nickname);
+                    network_send(client, packet, n);
+                    cfuhash_put(nicknames_hash, nickname, client);
+                } else {
+                    printf("Unregistered user nickname taken '%s', dropping\n", nickname);
+                    send_packet(client, "CLOSE Nickname taken!\n");
+                    client_free(client);
+                }
             } else {
                 printf("Unregistered user illegal nick '%s', dropping\n", nickname);
                 send_packet(client, "CLOSE Illegal nickname\n");
@@ -57,6 +70,7 @@ void handle_registed_packet(client_t *client, char *packet) {
 
 void handle_disconnect(client_t *client) {
     if (is_registered(client)) {
+        cfuhash_delete(nicknames_hash, client->nickname);
         printf("Registered user '%s' disconnected\n", client->nickname);
     } else {
         printf("Unregistered client disconnected\n");
