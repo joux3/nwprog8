@@ -78,7 +78,6 @@ int handle_registered_packet(client_t *client, char *packet) {
                     if (cfuhash_exists(nicknames_hash, destination)) {
                         char packet[255];
                         snprintf(packet, 255, "MSG %s %s %s", client->nickname, destination, msg);
-                        // TODO: msg can be too long
                         send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
                         return 0;
                     } else {
