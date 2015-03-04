@@ -5,21 +5,22 @@
 
 cfuhash_table_t *nicknames_hash;
 void init_packets() {
-   nicknames_hash = cfuhash_new_with_initial_size(1000); 
+    nicknames_hash = cfuhash_new_with_initial_size(1000); 
+    cfuhash_set_flag(nicknames_hash, CFUHASH_IGNORE_CASE); 
 }
 
-void handle_unregisted_packet(client_t *client, char *packet);
-void handle_registed_packet(client_t *client, char *packet);
+int handle_unregistered_packet(client_t *client, char *packet);
+int handle_registered_packet(client_t *client, char *packet);
 
 int is_registered(client_t *client) {
     return client->nickname[0] != '\0';
 }
 
-void handle_packet(client_t *client, char *packet) {
+int handle_packet(client_t *client, char *packet) {
     if (is_registered(client)) {
-        handle_registed_packet(client, packet);        
+        return handle_registered_packet(client, packet);        
     } else {
-        handle_unregisted_packet(client, packet);
+        return handle_unregistered_packet(client, packet);
     }
 }
 
@@ -27,10 +28,9 @@ void send_packet(client_t *client, char *packet) {
     network_send(client, packet, strlen(packet));
 }
 
-void handle_unregisted_packet(client_t *client, char *packet) {
+int handle_unregistered_packet(client_t *client, char *packet) {
     char *command = strtok(packet, " ");
     if (command != NULL && strcmp(command, "NICK") == 0) {
-        // TODO add check if nick is already taken
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             printf("Unregistered user illegal nick, dropping\n");
@@ -46,6 +46,7 @@ void handle_unregisted_packet(client_t *client, char *packet) {
                     int n = snprintf(packet, 256, "MOTD Welcome to da server, %s!\n", nickname);
                     network_send(client, packet, n);
                     cfuhash_put(nicknames_hash, nickname, client);
+                    return 0;
                 } else {
                     printf("Unregistered user nickname taken '%s', dropping\n", nickname);
                     send_packet(client, "CLOSE Nickname taken!\n");
@@ -62,10 +63,12 @@ void handle_unregisted_packet(client_t *client, char *packet) {
         send_packet(client, "CLOSE Please send nickname with NICK\n");
         client_free(client);
     }
+    return STOP_HANDLING;
 }
 
-void handle_registed_packet(client_t *client, char *packet) {
+int handle_registered_packet(client_t *client, char *packet) {
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
+    return 0;
 }
 
 void handle_disconnect(client_t *client) {

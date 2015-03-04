@@ -76,6 +76,7 @@ int make_nonblock(int sockfd) {
 
 client_t *client_create(int client_fd) {
     client_t *client = malloc(sizeof(client_t));
+    memset(client, 0, sizeof(client_t));
     if (client != NULL) {
         client->client_fd = client_fd;
         client->buf_used = 0;
@@ -93,6 +94,8 @@ void client_free(client_t *client) {
 int start_epoll(int listen_sock) {
     struct epoll_event ev, events[NETWORK_MAX_EVENTS];
     int nfds, epollfd;
+
+    memset(&ev, 0, sizeof(struct epoll_event));
 
     epollfd = epoll_create1(0);
     if (epollfd == -1) {
@@ -143,6 +146,7 @@ int accept_connection(int epollfd, int listen_sock) {
         return -1;
     }
     make_nonblock(conn_sock);
+    memset(&ev, 0, sizeof(struct epoll_event));
     ev.events = EPOLLIN;
     ev.data.ptr = client_create(conn_sock); // TODO: client_create can return NULL
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_sock,
@@ -170,7 +174,9 @@ int read_for_client(client_t *client) {
             if (client->buf[i] == '\n') {
                 client->buf[i] = '\0';
                 // pass the packet to the next layer to handle
-                handle_packet(client, &client->buf[packet_start]);
+                if (handle_packet(client, &client->buf[packet_start]) == STOP_HANDLING) {
+                    return 1;
+                }
                 packet_start = i + 1;
                 packet_size = 1;
             } 
