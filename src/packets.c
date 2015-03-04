@@ -17,6 +17,10 @@ void handle_packet(client_t *client, char *packet) {
     }
 }
 
+void send_packet(client_t *client, char *packet) {
+    network_send(client, packet, strlen(packet));
+}
+
 void handle_unregisted_packet(client_t *client, char *packet) {
     char *command = strtok(packet, " ");
     if (command != NULL && strcmp(command, "NICK") == 0) {
@@ -24,6 +28,7 @@ void handle_unregisted_packet(client_t *client, char *packet) {
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             printf("Unregistered user illegal nick, dropping\n");
+            send_packet(client, "CLOSE Illegal nickname\n");
             client_free(client);
         } else {
             int nicklen = strlen(nickname);
@@ -35,11 +40,13 @@ void handle_unregisted_packet(client_t *client, char *packet) {
                 network_send(client, packet, n);
             } else {
                 printf("Unregistered user illegal nick '%s', dropping\n", nickname);
+                send_packet(client, "CLOSE Illegal nickname\n");
                 client_free(client);
             }
         }
     } else {
         printf("Unregistered user didn't send NICK as first packet, dropping\n");
+        send_packet(client, "CLOSE Please send nickname with NICK\n");
         client_free(client);
     }
 }

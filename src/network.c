@@ -198,6 +198,9 @@ int network_send(client_t *client, const void *data, const size_t size) {
     while (bytes_sent < size) {
         int n = write(client->client_fd, data, size);
         if (n < 0) {
+            // Note: this could also be caused by error EWOULDBLOCK or EAGAIN
+            // if this happens very often, userland side send buffering could also be used
+            // (or kernel side buffers increased)
             perror("write"); 
             client_free(client); 
             return -1;
