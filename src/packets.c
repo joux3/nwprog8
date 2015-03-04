@@ -79,13 +79,13 @@ int handle_registered_packet(client_t *client, char *packet) {
                         char packet[255];
                         snprintf(packet, 255, "MSG %s %s %s", client->nickname, destination, msg);
                         send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
-                        return 0;
                     } else {
                         send_packet(client, "CMDREPLY Nickname not found");
                     }
                 }
             }
         }
+        return 0;
     }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
