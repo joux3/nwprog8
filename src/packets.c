@@ -34,7 +34,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             printf("Unregistered user illegal nick, dropping\n");
-            send_packet(client, "CLOSE Illegal nickname\n");
+            send_packet(client, "CLOSE Illegal nickname");
             client_free(client);
         } else {
             int nicklen = strlen(nickname);
@@ -42,31 +42,52 @@ int handle_unregistered_packet(client_t *client, char *packet) {
                 if (!cfuhash_exists(nicknames_hash, nickname)) {
                     strncpy(client->nickname, nickname, NICKNAME_LENGTH);
                     printf("Registered nickname: %s\n", nickname);
-                    char packet[256];
-                    int n = snprintf(packet, 256, "MOTD Welcome to da server, %s!\n", nickname);
+                    char packet[255];
+                    int n = snprintf(packet, 255, "MOTD Welcome to da server, %s!", nickname);
                     network_send(client, packet, n);
                     cfuhash_put(nicknames_hash, nickname, client);
                     return 0;
                 } else {
                     printf("Unregistered user nickname taken '%s', dropping\n", nickname);
-                    send_packet(client, "CLOSE Nickname taken!\n");
+                    send_packet(client, "CLOSE Nickname taken!");
                     client_free(client);
                 }
             } else {
                 printf("Unregistered user illegal nick '%s', dropping\n", nickname);
-                send_packet(client, "CLOSE Illegal nickname\n");
+                send_packet(client, "CLOSE Illegal nickname");
                 client_free(client);
             }
         }
     } else {
         printf("Unregistered user didn't send NICK as first packet, dropping\n");
-        send_packet(client, "CLOSE Please send nickname with NICK\n");
+        send_packet(client, "CLOSE Please send nickname with NICK");
         client_free(client);
     }
     return STOP_HANDLING;
 }
 
 int handle_registered_packet(client_t *client, char *packet) {
+    char *command = strtok(packet, " ");
+    if (command != NULL) {
+        if (strcmp(command, "MSG") == 0) {
+            char *destination = strtok(NULL, " ");
+            if (destination != NULL) {
+                char *msg = strtok(NULL, "\n");
+                if (msg != NULL) {
+                    printf("Message from '%s' to '%s': %s\n", client->nickname, destination, msg);
+                    if (cfuhash_exists(nicknames_hash, destination)) {
+                        char packet[255];
+                        snprintf(packet, 255, "MSG %s %s %s", client->nickname, destination, msg);
+                        // TODO: msg can be too long
+                        send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
+                        return 0;
+                    } else {
+                        // TODO: nick doesn't exist
+                    }
+                }
+            }
+        }
+    }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
 }
