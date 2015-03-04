@@ -81,7 +81,7 @@ int handle_registered_packet(client_t *client, char *packet) {
                         send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
                         return 0;
                     } else {
-                        // TODO: nick doesn't exist
+                        send_packet(client, "CMDREPLY Nickname not found");
                     }
                 }
             }
