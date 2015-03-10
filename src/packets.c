@@ -18,6 +18,8 @@ channel_t *channel_create(char *channel_name) {
     if (channel == NULL)
         return NULL;
     strncpy(channel->name, channel_name, CHANNEL_LENGTH);
+    channel->clients = cfuhash_new();
+    cfuhash_set_flag(channel->clients, CFUHASH_IGNORE_CASE); 
     return channel;
 }
 
@@ -141,7 +143,12 @@ int handle_registered_packet(client_t *client, char *packet) {
             printf("User '%s' failed to join channel '%s', get_or_create_channel NULL\n", client->nickname, channel_name);
             return 0;
         }
+        if (cfuhash_exists(channel->clients, client->nickname)) {
+            send_packet(client, "CMDREPLY You have already joined!");
+            return 0;
+        }
         printf("User '%s' joined channel '%s'\n", client->nickname, channel_name);
+        cfuhash_put(channel->clients, client->nickname, client);
         client->channels[i] = channel;
         return 0;
     }

@@ -81,7 +81,7 @@ client_t *client_create(int client_fd) {
         client->client_fd = client_fd;
         client->buf_used = 0;
         memset(&client->nickname, 0, NICKNAME_LENGTH);
-        memset(&client->channels, NULL, USER_MAX_CHANNELS * sizeof(channel_t*));
+        memset(&client->channels, 0, USER_MAX_CHANNELS * sizeof(channel_t*));
     }
     return client;
 }
