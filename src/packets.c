@@ -60,9 +60,9 @@ void channel_broadcast(channel_t *channel, char *packet) {
 }
 
 void send_channel_names(client_t *client, channel_t *channel) {
-    char packet[256];
-    memset(packet, 0, 256); 
-    int packet_header_size = snprintf(packet, 256, "NAMES %s", channel->name);
+    char packet[NETWORK_MAX_PACKET_SIZE];
+    memset(packet, 0, NETWORK_MAX_PACKET_SIZE); 
+    int packet_header_size = snprintf(packet, NETWORK_MAX_PACKET_SIZE, "NAMES %s", channel->name);
     int current_start = packet_header_size;
     char *nick;
     client_t *channel_client;
@@ -72,7 +72,7 @@ void send_channel_names(client_t *client, channel_t *channel) {
         int nicklen = strlen(nick);
         // another nickname won't fit the packet
         // send the packet and start from start
-        if (current_start + nicklen + 1 >= 256) {
+        if (current_start + nicklen + 1 >= NETWORK_MAX_PACKET_SIZE) {
             send_packet(client, packet);
             current_start = packet_header_size;
             packet[current_start] = '\0';
@@ -115,8 +115,8 @@ int handle_unregistered_packet(client_t *client, char *packet) {
                 if (!cfuhash_exists(nicknames_hash, nickname)) {
                     strncpy(client->nickname, nickname, NICKNAME_LENGTH);
                     printf("Registered nickname: %s\n", nickname);
-	                char packet[256];
-                    int n = snprintf(packet, 256, "MOTD Welcome to da server, %s!", nickname);
+	                char packet[NETWORK_MAX_PACKET_SIZE];
+                    int n = snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MOTD Welcome to da server, %s!", nickname);
                     network_send(client, packet, n);
                     cfuhash_put(nicknames_hash, nickname, client);
                     return 0;
@@ -159,8 +159,8 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
 
         printf("Message from '%s' to '%s': %s\n", client->nickname, destination, msg);
-        char packet[256];
-        snprintf(packet, 256, "MSG %s %s %s", client->nickname, destination, msg);
+        char packet[NETWORK_MAX_PACKET_SIZE];
+        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", client->nickname, destination, msg);
         if (cfuhash_exists(nicknames_hash, destination)) {
             send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
         } else if (cfuhash_exists(channels_hash, destination)) {
@@ -206,8 +206,8 @@ int handle_registered_packet(client_t *client, char *packet) {
         cfuhash_put(channel->clients, client->nickname, client);
         client->channels[i] = channel;
         // send the join message to users on the channel
-        char packet[256];
-        snprintf(packet, 256, "JOIN %s %s", client->nickname, channel->name);
+        char packet[NETWORK_MAX_PACKET_SIZE];
+        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", client->nickname, channel->name);
         channel_broadcast(channel, packet);
         send_channel_names(client, channel);
         return 0;
@@ -234,8 +234,8 @@ int handle_registered_packet(client_t *client, char *packet) {
         if (cfuhash_num_entries(channel->clients) == 0) {
             channel_destroy(channel); 
         } else {
-            char packet[256];
-            snprintf(packet, 256, "LEAVE %s %s", client->nickname, channel->name);
+            char packet[NETWORK_MAX_PACKET_SIZE];
+            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "LEAVE %s %s", client->nickname, channel->name);
             channel_broadcast(channel, packet);
         }
         printf("User '%s' left channel '%s'\n", client->nickname, channel_name);
@@ -277,8 +277,8 @@ void remove_from_channels(client_t *client) {
             } else {
                 char *key;
                 client_t *channel_client;
-                char packet[256];
-                snprintf(packet, 256, "KILL %s client disconnected", client->nickname);
+                char packet[NETWORK_MAX_PACKET_SIZE];
+                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s client disconnected", client->nickname);
                 int res = cfuhash_each(channel->clients, &key, (void**)&channel_client);
                 assert(res != 0);
                 do {
