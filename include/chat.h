@@ -3,6 +3,7 @@
 
 #define NICKNAME_LENGTH 10
 #define CHANNEL_LENGTH 10
+#define CHANNEL_MIN_LENGTH 2 // don't allow just "#" as channel name
 #define USER_MAX_CHANNELS 10
 
 typedef struct {

@@ -4,9 +4,12 @@
 #include "cfuhash.h"
 
 cfuhash_table_t *nicknames_hash;
+cfuhash_table_t *channels_hash;
 void init_packets() {
     nicknames_hash = cfuhash_new_with_initial_size(1000); 
     cfuhash_set_flag(nicknames_hash, CFUHASH_IGNORE_CASE); 
+    channels_hash = cfuhash_new_with_initial_size(1000); 
+    cfuhash_set_flag(channels_hash, CFUHASH_IGNORE_CASE); 
 }
 
 int handle_unregistered_packet(client_t *client, char *packet);
@@ -68,7 +71,11 @@ int handle_unregistered_packet(client_t *client, char *packet) {
 
 int handle_registered_packet(client_t *client, char *packet) {
     char *command = strtok(packet, " ");
-    if (command != NULL) {
+    if (command == NULL) {
+        printf("Illegal packet from %s: %s\n", client->nickname, packet);
+        return 0;
+    }
+    if (strcmp(command, "MSG") == 0) {
         if (strcmp(command, "MSG") != 0) {
             return 0;
         }
@@ -90,6 +97,12 @@ int handle_registered_packet(client_t *client, char *packet) {
             send_packet(client, "CMDREPLY Nickname not found");
         }
         return 0;
+    } else if (strcmp(command, "JOIN") == 0) {
+        char *channel = strtok(NULL, " ");
+        if (channel == NULL || strlen(channel) < CHANNEL_MIN_LENGTH || strlen(channel) >= CHANNEL_LENGTH || channel[0] != '#') {
+            send_packet(client, "CMDREPLY Illegal channel name");
+            return 0;
+        }
     }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
