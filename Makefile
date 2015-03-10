@@ -9,10 +9,10 @@ CFLAGS+=-MMD  # generate dependency .d files
 LDLIBS=
 LDFLAGS=
 
-SRCS=src/main.c src/network.c src/packets.c src/libcfu/cfuhash.c 
-TARGETS=src/main
+SRCS=src/server.c src/network.c src/packets.c src/libcfu/cfuhash.c 
+TARGETS=src/server
 
-src/main: src/main.o src/network.o src/packets.o src/libcfu/cfuhash.o
+src/server: src/server.o src/network.o src/packets.o src/libcfu/cfuhash.o
 
 TEST_SUITE=src/foo-test
 
