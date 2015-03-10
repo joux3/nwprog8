@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "packets.h"
 #include "cfuhash.h"
 
@@ -10,6 +11,25 @@ void init_packets() {
     cfuhash_set_flag(nicknames_hash, CFUHASH_IGNORE_CASE); 
     channels_hash = cfuhash_new_with_initial_size(1000); 
     cfuhash_set_flag(channels_hash, CFUHASH_IGNORE_CASE); 
+}
+
+channel_t *channel_create(char *channel_name) {
+    channel_t *channel = malloc(sizeof(channel_t));
+    if (channel == NULL)
+        return NULL;
+    strncpy(channel->name, channel_name, CHANNEL_LENGTH);
+    return channel;
+}
+
+channel_t *get_or_create_channel(char *channel_name) {
+    channel_t *channel = cfuhash_get(channels_hash, channel_name); 
+    if (channel == NULL) {
+        channel = channel_create(channel_name);
+        if (channel == NULL)
+            return NULL;
+        cfuhash_put(channels_hash, channel_name, channel);
+    }
+    return channel;
 }
 
 int handle_unregistered_packet(client_t *client, char *packet);
@@ -98,8 +118,8 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
         return 0;
     } else if (strcmp(command, "JOIN") == 0) {
-        char *channel = strtok(NULL, " ");
-        if (channel == NULL || strlen(channel) < CHANNEL_MIN_LENGTH || strlen(channel) >= CHANNEL_LENGTH || channel[0] != '#') {
+        char *channel_name = strtok(NULL, " ");
+        if (channel_name == NULL || strlen(channel_name) < CHANNEL_MIN_LENGTH || strlen(channel_name) >= CHANNEL_LENGTH || channel_name[0] != '#') {
             send_packet(client, "CMDREPLY Illegal channel name");
             return 0;
         }
@@ -114,8 +134,16 @@ int handle_registered_packet(client_t *client, char *packet) {
                 break;
             }
         }
-        // channel slot i is free
-        client->channels[i] = (channel_t*)1;
+        // channel slot i is free at this moment
+        channel_t *channel = get_or_create_channel(channel_name);
+        if (channel == NULL) {
+            send_packet(client, "CMDREPLY Joining channel failed, server memory full");
+            printf("User '%s' failed to join channel '%s', get_or_create_channel NULL\n", client->nickname, channel_name);
+            return 0;
+        }
+        printf("User '%s' joined channel '%s'\n", client->nickname, channel_name);
+        client->channels[i] = channel;
+        return 0;
     }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
