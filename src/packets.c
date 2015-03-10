@@ -38,7 +38,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
             client_free(client);
         } else {
             int nicklen = strlen(nickname);
-            if (nicklen > 0 && nicklen < NICKNAME_LENGTH) {
+            if (nicklen > 0 && nicklen < NICKNAME_LENGTH && nickname[0] != '#') {
                 if (!cfuhash_exists(nicknames_hash, nickname)) {
                     strncpy(client->nickname, nickname, NICKNAME_LENGTH);
                     printf("Registered nickname: %s\n", nickname);
