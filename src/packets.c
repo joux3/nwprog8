@@ -18,7 +18,6 @@ void send_packet(client_t *client, char *packet) {
     network_send(client, packet, strlen(packet));
 }
 
-
 channel_t *channel_create(char *channel_name) {
     channel_t *channel = malloc(sizeof(channel_t));
     if (channel == NULL)
@@ -62,6 +61,29 @@ void channel_broadcast(channel_t *channel, char *packet) {
 
 void send_channel_names(client_t *client, channel_t *channel) {
     char packet[256];
+    memset(packet, 0, 256); 
+    int packet_header_size = snprintf(packet, 256, "NAMES %s", channel->name);
+    int current_start = packet_header_size;
+    char *nick;
+    client_t *channel_client;
+    int res = cfuhash_each(channel->clients, &nick, (void**)&channel_client);
+    assert(res != 0);
+    do {
+        int nicklen = strlen(nick);
+        // another nickname won't fit the packet
+        // send the packet and start from start
+        if (current_start + nicklen + 1 >= 256) {
+            send_packet(client, packet);
+            current_start = packet_header_size;
+            packet[current_start] = '\0';
+        }
+        packet[current_start] = ' ';
+        strcpy(&packet[current_start + 1], nick);
+        current_start += nicklen + 1;
+    } while (cfuhash_next(channel->clients, &nick, (void**)&channel_client));
+    if (current_start != packet_header_size) {
+        send_packet(client, packet);
+    }
 }
 
 int handle_unregistered_packet(client_t *client, char *packet);
@@ -218,7 +240,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
         printf("User '%s' left channel '%s'\n", client->nickname, channel_name);
         return 0;
-    } else if (strcmp(command, "NAMES")) {
+    } else if (strcmp(command, "NAMES") == 0) {
         char *channel_name = strtok(NULL, " ");
         if (channel_name == NULL) {
             send_packet(client, "CMDREPLY Illegal channel name");
@@ -236,6 +258,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
         channel_t *channel = client->channels[i];
         send_channel_names(client, channel);
+        return 0;
     }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
