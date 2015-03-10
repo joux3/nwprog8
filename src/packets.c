@@ -275,7 +275,6 @@ void remove_from_channels(client_t *client) {
             if (cfuhash_num_entries(channel->clients) == 0) {
                 channel_destroy(channel); 
             } else {
-                // TODO don't send duplicate KILLs if users share multiple channels
                 char *key;
                 client_t *channel_client;
                 char packet[256];
