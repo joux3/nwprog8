@@ -38,7 +38,8 @@ channel_t *get_or_create_channel(char *channel_name) {
 
 void channel_destroy(channel_t *channel) {
     printf("Destroying channel %s\n", channel->name);
-    cfuhash_delete(channels_hash, channel->name);
+    void *res = cfuhash_delete(channels_hash, channel->name);
+    assert(res != NULL);
     assert(cfuhash_num_entries(channel->clients) == 0);
     cfuhash_destroy(channel->clients);
     free(channel);
@@ -175,6 +176,39 @@ int handle_registered_packet(client_t *client, char *packet) {
         client->channels[i] = channel;
         // TODO: send names reply
         return 0;
+    } else if (strcmp(command, "LEAVE") == 0) {
+        char *channel_name = strtok(NULL, " ");
+        if (channel_name == NULL) {
+            send_packet(client, "CMDREPLY Illegal channel name");
+            return 0;
+        }
+        int i;
+        for (i = 0; i <= USER_MAX_CHANNELS; i++) {
+            if (i == USER_MAX_CHANNELS) {
+                send_packet(client, "CMDREPLY You are not on that channel");
+                return 0;
+            }
+            if (client->channels[i] && strcasecmp(client->channels[i]->name, channel_name) == 0) {
+                break;
+            }
+        }
+        channel_t *channel = client->channels[i];
+        void *res = cfuhash_delete(channel->clients, client->nickname);
+        assert(res != NULL);
+        if (cfuhash_num_entries(channel->clients) == 0) {
+            channel_destroy(channel); 
+        } else {
+            char *key;
+            client_t *channel_client;
+            char packet[255];
+            snprintf(packet, 255, "LEAVE %s %s", client->nickname, channel->name);
+            cfuhash_each(channel->clients, &key, (void**)&channel_client);
+            do {
+                send_packet(channel_client, packet);
+            } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
+        }
+        printf("User '%s' left channel '%s'\n", client->nickname, channel_name);
+        return 0;
     }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
@@ -184,7 +218,8 @@ void remove_from_channels(client_t *client) {
     for (int i = 0; i < USER_MAX_CHANNELS; i++) {
         if (client->channels[i] != NULL) {
             channel_t *channel = client->channels[i];
-	        cfuhash_delete(channel->clients, client->nickname);
+            void *res = cfuhash_delete(channel->clients, client->nickname);
+            assert(res != NULL);
             if (cfuhash_num_entries(channel->clients) == 0) {
                 channel_destroy(channel); 
             } else {
@@ -204,7 +239,8 @@ void remove_from_channels(client_t *client) {
 
 void handle_disconnect(client_t *client) {
     if (is_registered(client)) {
-        cfuhash_delete(nicknames_hash, client->nickname);
+        void *res = cfuhash_delete(nicknames_hash, client->nickname);
+        assert(res != NULL);
         remove_from_channels(client);
         printf("Registered user '%s' disconnected\n", client->nickname);
     } else {
