@@ -61,6 +61,7 @@ void channel_broadcast(channel_t *channel, char *packet) {
 }
 
 void send_channel_names(client_t *client, channel_t *channel) {
+    char packet[256];
 }
 
 int handle_unregistered_packet(client_t *client, char *packet);
@@ -92,8 +93,8 @@ int handle_unregistered_packet(client_t *client, char *packet) {
                 if (!cfuhash_exists(nicknames_hash, nickname)) {
                     strncpy(client->nickname, nickname, NICKNAME_LENGTH);
                     printf("Registered nickname: %s\n", nickname);
-                    char packet[255];
-                    int n = snprintf(packet, 255, "MOTD Welcome to da server, %s!", nickname);
+	                char packet[256];
+                    int n = snprintf(packet, 256, "MOTD Welcome to da server, %s!", nickname);
                     network_send(client, packet, n);
                     cfuhash_put(nicknames_hash, nickname, client);
                     return 0;
@@ -136,8 +137,8 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
 
         printf("Message from '%s' to '%s': %s\n", client->nickname, destination, msg);
-        char packet[255];
-        snprintf(packet, 255, "MSG %s %s %s", client->nickname, destination, msg);
+        char packet[256];
+        snprintf(packet, 256, "MSG %s %s %s", client->nickname, destination, msg);
         if (cfuhash_exists(nicknames_hash, destination)) {
             send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
         } else if (cfuhash_exists(channels_hash, destination)) {
@@ -183,8 +184,8 @@ int handle_registered_packet(client_t *client, char *packet) {
         cfuhash_put(channel->clients, client->nickname, client);
         client->channels[i] = channel;
         // send the join message to users on the channel
-        char packet[255];
-        snprintf(packet, 255, "JOIN %s %s", client->nickname, channel->name);
+        char packet[256];
+        snprintf(packet, 256, "JOIN %s %s", client->nickname, channel->name);
         channel_broadcast(channel, packet);
         send_channel_names(client, channel);
         return 0;
@@ -211,8 +212,8 @@ int handle_registered_packet(client_t *client, char *packet) {
         if (cfuhash_num_entries(channel->clients) == 0) {
             channel_destroy(channel); 
         } else {
-            char packet[255];
-            snprintf(packet, 255, "LEAVE %s %s", client->nickname, channel->name);
+            char packet[256];
+            snprintf(packet, 256, "LEAVE %s %s", client->nickname, channel->name);
             channel_broadcast(channel, packet);
         }
         printf("User '%s' left channel '%s'\n", client->nickname, channel_name);
@@ -250,8 +251,8 @@ void remove_from_channels(client_t *client) {
                 channel_destroy(channel); 
             } else {
                 // TODO don't send duplicate KILLs if users share multiple channels
-                char packet[255];
-                snprintf(packet, 255, "KILL %s client disconnected", client->nickname);
+                char packet[256];
+                snprintf(packet, 256, "KILL %s client disconnected", client->nickname);
                 channel_broadcast(channel, packet);
             }
         }
