@@ -121,12 +121,25 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
 
         printf("Message from '%s' to '%s': %s\n", client->nickname, destination, msg);
+        char packet[255];
+        snprintf(packet, 255, "MSG %s %s %s", client->nickname, destination, msg);
         if (cfuhash_exists(nicknames_hash, destination)) {
-            char packet[255];
-            snprintf(packet, 255, "MSG %s %s %s", client->nickname, destination, msg);
             send_packet(((client_t*)cfuhash_get(nicknames_hash, destination)), packet);
+        } else if (cfuhash_exists(channels_hash, destination)) {
+            channel_t *channel = cfuhash_get(channels_hash, destination);
+            if (!cfuhash_exists(channel->clients, client->nickname)) {
+                send_packet(client, "CMDREPLY You need to join the channel first");
+                return 0;
+            }
+            char *key;
+            client_t *channel_client;
+            if (cfuhash_each(channel->clients, &key, (void**)&channel_client)) {
+                do {
+                    send_packet(channel_client, packet);
+                } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
+            }
         } else {
-            send_packet(client, "CMDREPLY Nickname not found");
+            send_packet(client, "CMDREPLY Nickname or channel not found");
         }
         return 0;
     } else if (strcmp(command, "JOIN") == 0) {
