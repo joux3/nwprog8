@@ -265,6 +265,8 @@ int handle_registered_packet(client_t *client, char *packet) {
 }
 
 void remove_from_channels(client_t *client) {
+    // local nicknames that already know about the disconnect
+    cfuhash_table_t *already_sent = cfuhash_new();
     for (int i = 0; i < USER_MAX_CHANNELS; i++) {
         if (client->channels[i] != NULL) {
             channel_t *channel = client->channels[i];
@@ -274,12 +276,23 @@ void remove_from_channels(client_t *client) {
                 channel_destroy(channel); 
             } else {
                 // TODO don't send duplicate KILLs if users share multiple channels
+                char *key;
+                client_t *channel_client;
                 char packet[256];
                 snprintf(packet, 256, "KILL %s client disconnected", client->nickname);
-                channel_broadcast(channel, packet);
+                int res = cfuhash_each(channel->clients, &key, (void**)&channel_client);
+                assert(res != 0);
+                do {
+                    if (!cfuhash_exists_data(already_sent, channel_client, sizeof(client_t*))) {
+                        // only send if the client doesn't already know about the disconnect
+                        send_packet(channel_client, packet);
+                        cfuhash_put_data(already_sent, channel_client, sizeof(client_t*), NULL, 0, NULL);
+                    }
+                } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
             }
         }
     }
+    cfuhash_destroy(already_sent);
 }
 
 void handle_disconnect(client_t *client) {
