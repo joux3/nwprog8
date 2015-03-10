@@ -1,7 +1,7 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include "chat_constants.h"
+#include "chat.h"
 
 #define NETWORK_MAX_EVENTS 10
 #define NETWORK_LISTEN_Q 10
