@@ -60,6 +60,9 @@ void channel_broadcast(channel_t *channel, char *packet) {
     } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
 }
 
+void send_channel_names(client_t *client, channel_t *channel) {
+}
+
 int handle_unregistered_packet(client_t *client, char *packet);
 int handle_registered_packet(client_t *client, char *packet);
 
@@ -180,16 +183,10 @@ int handle_registered_packet(client_t *client, char *packet) {
         cfuhash_put(channel->clients, client->nickname, client);
         client->channels[i] = channel;
         // send the join message to users on the channel
-        char *key;
-        client_t *channel_client;
         char packet[255];
         snprintf(packet, 255, "JOIN %s %s", client->nickname, channel->name);
-        cfuhash_each(channel->clients, &key, (void**)&channel_client);
-        do {
-            send_packet(channel_client, packet);
-        } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
-         
-        // TODO: send names reply
+        channel_broadcast(channel, packet);
+        send_channel_names(client, channel);
         return 0;
     } else if (strcmp(command, "LEAVE") == 0) {
         char *channel_name = strtok(NULL, " ");
@@ -208,6 +205,7 @@ int handle_registered_packet(client_t *client, char *packet) {
             }
         }
         channel_t *channel = client->channels[i];
+        client->channels[i] = NULL;
         void *res = cfuhash_delete(channel->clients, client->nickname);
         assert(res != NULL);
         if (cfuhash_num_entries(channel->clients) == 0) {
@@ -219,6 +217,24 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
         printf("User '%s' left channel '%s'\n", client->nickname, channel_name);
         return 0;
+    } else if (strcmp(command, "NAMES")) {
+        char *channel_name = strtok(NULL, " ");
+        if (channel_name == NULL) {
+            send_packet(client, "CMDREPLY Illegal channel name");
+            return 0;
+        }
+        int i;
+        for (i = 0; i <= USER_MAX_CHANNELS; i++) {
+            if (i == USER_MAX_CHANNELS) {
+                send_packet(client, "CMDREPLY You are not on that channel");
+                return 0;
+            }
+            if (client->channels[i] && strcasecmp(client->channels[i]->name, channel_name) == 0) {
+                break;
+            }
+        }
+        channel_t *channel = client->channels[i];
+        send_channel_names(client, channel);
     }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
