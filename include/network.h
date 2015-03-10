@@ -15,7 +15,7 @@ typedef struct {
 	int buf_used;
 	char buf[NETWORK_CLIENT_BUF];	
 	char nickname[NICKNAME_LENGTH];
-	channel_t channels[USER_MAX_CHANNELS];
+	channel_t *channels[USER_MAX_CHANNELS];
 } client_t;
 
 // inits the network socket and starts running the event loop

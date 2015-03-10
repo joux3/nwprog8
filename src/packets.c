@@ -103,6 +103,19 @@ int handle_registered_packet(client_t *client, char *packet) {
             send_packet(client, "CMDREPLY Illegal channel name");
             return 0;
         }
+        // check if user has too many channels
+        int i;
+        for (i = 0; i <= USER_MAX_CHANNELS; i++) {
+            if (i == USER_MAX_CHANNELS) {
+                send_packet(client, "CMDREPLY You have joined too many channels");
+                return 0;
+            }
+            if (client->channels[i] == NULL) {
+                break;
+            }
+        }
+        // channel slot i is free
+        client->channels[i] = (channel_t*)1;
     }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
@@ -110,6 +123,7 @@ int handle_registered_packet(client_t *client, char *packet) {
 
 void handle_disconnect(client_t *client) {
     if (is_registered(client)) {
+        // TODO remove user from channel
         cfuhash_delete(nicknames_hash, client->nickname);
         printf("Registered user '%s' disconnected\n", client->nickname);
     } else {
