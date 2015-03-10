@@ -174,6 +174,16 @@ int handle_registered_packet(client_t *client, char *packet) {
         printf("User '%s' joined channel '%s'\n", client->nickname, channel_name);
         cfuhash_put(channel->clients, client->nickname, client);
         client->channels[i] = channel;
+        // send the join message to users on the channel
+        char *key;
+        client_t *channel_client;
+        char packet[255];
+        snprintf(packet, 255, "JOIN %s %s", client->nickname, channel->name);
+        cfuhash_each(channel->clients, &key, (void**)&channel_client);
+        do {
+            send_packet(channel_client, packet);
+        } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
+         
         // TODO: send names reply
         return 0;
     } else if (strcmp(command, "LEAVE") == 0) {
