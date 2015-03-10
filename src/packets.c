@@ -14,6 +14,11 @@ void init_packets() {
     cfuhash_set_flag(channels_hash, CFUHASH_IGNORE_CASE); 
 }
 
+void send_packet(client_t *client, char *packet) {
+    network_send(client, packet, strlen(packet));
+}
+
+
 channel_t *channel_create(char *channel_name) {
     channel_t *channel = malloc(sizeof(channel_t));
     if (channel == NULL)
@@ -45,6 +50,16 @@ void channel_destroy(channel_t *channel) {
     free(channel);
 }
 
+void channel_broadcast(channel_t *channel, char *packet) {
+    char *key;
+    client_t *channel_client;
+    int res = cfuhash_each(channel->clients, &key, (void**)&channel_client);
+    assert(res != 0);
+    do {
+        send_packet(channel_client, packet);
+    } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
+}
+
 int handle_unregistered_packet(client_t *client, char *packet);
 int handle_registered_packet(client_t *client, char *packet);
 
@@ -58,10 +73,6 @@ int handle_packet(client_t *client, char *packet) {
     } else {
         return handle_unregistered_packet(client, packet);
     }
-}
-
-void send_packet(client_t *client, char *packet) {
-    network_send(client, packet, strlen(packet));
 }
 
 int handle_unregistered_packet(client_t *client, char *packet) {
@@ -132,13 +143,7 @@ int handle_registered_packet(client_t *client, char *packet) {
                 send_packet(client, "CMDREPLY You need to join the channel first");
                 return 0;
             }
-            char *key;
-            client_t *channel_client;
-            if (cfuhash_each(channel->clients, &key, (void**)&channel_client)) {
-                do {
-                    send_packet(channel_client, packet);
-                } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
-            }
+            channel_broadcast(channel, packet);
         } else {
             send_packet(client, "CMDREPLY Nickname or channel not found");
         }
@@ -208,14 +213,9 @@ int handle_registered_packet(client_t *client, char *packet) {
         if (cfuhash_num_entries(channel->clients) == 0) {
             channel_destroy(channel); 
         } else {
-            char *key;
-            client_t *channel_client;
             char packet[255];
             snprintf(packet, 255, "LEAVE %s %s", client->nickname, channel->name);
-            cfuhash_each(channel->clients, &key, (void**)&channel_client);
-            do {
-                send_packet(channel_client, packet);
-            } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
+            channel_broadcast(channel, packet);
         }
         printf("User '%s' left channel '%s'\n", client->nickname, channel_name);
         return 0;
@@ -234,14 +234,9 @@ void remove_from_channels(client_t *client) {
                 channel_destroy(channel); 
             } else {
                 // TODO don't send duplicate KILLs if users share multiple channels
-                char *key;
-                client_t *channel_client;
                 char packet[255];
                 snprintf(packet, 255, "KILL %s client disconnected", client->nickname);
-                cfuhash_each(channel->clients, &key, (void**)&channel_client);
-                do {
-                    send_packet(channel_client, packet);
-                } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
+                channel_broadcast(channel, packet);
             }
         }
     }
