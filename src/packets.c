@@ -172,9 +172,18 @@ void remove_from_channels(client_t *client) {
         if (client->channels[i] != NULL) {
             channel_t *channel = client->channels[i];
 	        cfuhash_delete(channel->clients, client->nickname);
-            // TODO send notifications
             if (cfuhash_num_entries(channel->clients) == 0) {
                 channel_destroy(channel); 
+            } else {
+                // TODO don't send duplicate KILLs if users share multiple channels
+                char *key;
+                client_t *channel_client;
+                char packet[255];
+                snprintf(packet, 255, "KILL %s client disconnected", client->nickname);
+                cfuhash_each(channel->clients, &key, (void**)&channel_client);
+                do {
+                    send_packet(channel_client, packet);
+                } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
             }
         }
     }
