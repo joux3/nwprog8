@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "packets.h"
 #include "cfuhash.h"
 
@@ -17,6 +18,7 @@ channel_t *channel_create(char *channel_name) {
     channel_t *channel = malloc(sizeof(channel_t));
     if (channel == NULL)
         return NULL;
+    printf("Created channel %s\n", channel_name);
     strncpy(channel->name, channel_name, CHANNEL_LENGTH);
     channel->clients = cfuhash_new();
     cfuhash_set_flag(channel->clients, CFUHASH_IGNORE_CASE); 
@@ -32,6 +34,14 @@ channel_t *get_or_create_channel(char *channel_name) {
         cfuhash_put(channels_hash, channel_name, channel);
     }
     return channel;
+}
+
+void channel_destroy(channel_t *channel) {
+    printf("Destroying channel %s\n", channel->name);
+    cfuhash_delete(channels_hash, channel->name);
+    assert(cfuhash_num_entries(channel->clients) == 0);
+    cfuhash_destroy(channel->clients);
+    free(channel);
 }
 
 int handle_unregistered_packet(client_t *client, char *packet);
@@ -150,16 +160,30 @@ int handle_registered_packet(client_t *client, char *packet) {
         printf("User '%s' joined channel '%s'\n", client->nickname, channel_name);
         cfuhash_put(channel->clients, client->nickname, client);
         client->channels[i] = channel;
+        // TODO: send names reply
         return 0;
     }
     printf("Unhandled packet from %s: %s\n", client->nickname, packet);
     return 0;
 }
 
+void remove_from_channels(client_t *client) {
+    for (int i = 0; i < USER_MAX_CHANNELS; i++) {
+        if (client->channels[i] != NULL) {
+            channel_t *channel = client->channels[i];
+	        cfuhash_delete(channel->clients, client->nickname);
+            // TODO send notifications
+            if (cfuhash_num_entries(channel->clients) == 0) {
+                channel_destroy(channel); 
+            }
+        }
+    }
+}
+
 void handle_disconnect(client_t *client) {
     if (is_registered(client)) {
-        // TODO remove user from channel
         cfuhash_delete(nicknames_hash, client->nickname);
+        remove_from_channels(client);
         printf("Registered user '%s' disconnected\n", client->nickname);
     } else {
         printf("Unregistered client disconnected\n");
