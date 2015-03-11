@@ -7,12 +7,13 @@ CFLAGS+=-W -Wall -pedantic -Wextra -Wfatal-errors -Wformat
 CFLAGS+=-O0 -g -ggdb
 CFLAGS+=-MMD  # generate dependency .d files
 LDLIBS=
-LDFLAGS=
+LDFLAGS= -pthread
 
-SRCS=src/server.c src/network.c src/packets.c src/libcfu/cfuhash.c 
-TARGETS=src/server
+SRCS=src/server.c src/network.c src/packets.c src/client.c src/libcfu/cfuhash.c 
+TARGETS=src/server src/client
 
 src/server: src/server.o src/network.o src/packets.o src/libcfu/cfuhash.o
+src/client: src/client.o
 
 TEST_SUITE=src/foo-test
 
