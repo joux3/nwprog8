@@ -7,11 +7,14 @@
 
 cfuhash_table_t *nicknames_hash;
 cfuhash_table_t *channels_hash;
+cfuhash_table_t *servers_hash; // not actually a hash, just a server_t -> server_t mapping
+
 void init_packets() {
     nicknames_hash = cfuhash_new_with_initial_size(1000); 
     cfuhash_set_flag(nicknames_hash, CFUHASH_IGNORE_CASE); 
     channels_hash = cfuhash_new_with_initial_size(1000); 
     cfuhash_set_flag(channels_hash, CFUHASH_IGNORE_CASE); 
+    servers_hash = cfuhash_new();
 }
 
 void send_packet(conn_t *conn, char *packet) {
@@ -307,6 +310,17 @@ void handle_disconnect(client_t *client) {
 
 int handle_server_packet(server_t *server, char *packet) {
     printf("Packet from another server [%d]: %s\n", server->conn.fd, packet);
+    // broadcast the packet across rest of the network
+    void *cur_key, *cur_data;
+    size_t key_len, data_len;
+    int more = cfuhash_each_data(servers_hash, &cur_key, &key_len, &cur_data, &data_len);
+    while (more) {
+        server_t *cur_server = (server_t*)cur_server;
+        if (cur_server != server) {
+            send_packet((conn_t*)cur_server, packet);
+        }
+        more = cfuhash_next_data(servers_hash, &cur_key, &key_len, &cur_data, &data_len);
+    }
     return 0;
 }
 
@@ -321,8 +335,12 @@ void handle_server_connect(server_t *server) {
         send_packet((conn_t*)server, packet);
         res = cfuhash_next(nicknames_hash, &nickname, &data);
     }
+    cfuhash_put_data(servers_hash, server, sizeof(server), server, sizeof(server), NULL);
 }
 
 void handle_server_disconnect(server_t *server) {
-    // TODO
+    // TODO kill all the nicknames associated with this server
+    printf("Server %d disconnected\n", server->conn.fd);
+    void *data = cfuhash_delete_data(servers_hash, server, sizeof(server));
+    assert(data != NULL);
 }
