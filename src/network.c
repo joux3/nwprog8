@@ -10,14 +10,14 @@
 #include "network.h"
 #include "packets.h"
 
-int start_listening();
+int start_listening(uint16_t port);
 int make_nonblock(int);
 int start_epoll(int);
 int accept_connection(int, int);
 int read_for_client(client_t *client);
 
 int network_start() {
-    int listen_sock = start_listening();
+    int listen_sock = start_listening(NETWORK_CLIENT_PORT);
     if (listen_sock < 0) {
         printf("Failed to open server socket!");
         return -1;
@@ -31,7 +31,7 @@ int network_start() {
     return 0;
 }
 
-int start_listening() {
+int start_listening(uint16_t port) {
     int listenfd;
     struct sockaddr_in6 servaddr;
 
@@ -46,7 +46,7 @@ int start_listening() {
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin6_family = AF_INET6;
     servaddr.sin6_addr = in6addr_any;
-    servaddr.sin6_port = htons(NETWORK_CLIENT_PORT);
+    servaddr.sin6_port = htons(port);
 
     if (bind(listenfd, (struct sockaddr *) &servaddr,
         sizeof(servaddr)) < 0) {
