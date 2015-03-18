@@ -22,4 +22,10 @@ void handle_disconnect(client_t *client);
 // return value: returns STOP_HANDLING if the network layer should stop handling this server
 int handle_server_packet(server_t *server, char *packet);
 
+// called when a new server connection happens
+void handle_server_connect(server_t *server);
+
+// called before server_t is freed from memory
+void handle_server_disconnect(server_t *server);
+
 #endif

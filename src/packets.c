@@ -15,7 +15,7 @@ void init_packets() {
 }
 
 void send_packet(client_t *client, char *packet) {
-    network_send(client, packet, strlen(packet));
+    network_send((conn_t*)client, packet, strlen(packet));
 }
 
 channel_t *channel_create(char *channel_name) {
@@ -116,8 +116,8 @@ int handle_unregistered_packet(client_t *client, char *packet) {
                     strncpy(client->nickname, nickname, NICKNAME_LENGTH);
                     printf("Registered nickname: %s\n", nickname);
 	                char packet[NETWORK_MAX_PACKET_SIZE];
-                    int n = snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MOTD Welcome to da server, %s!", nickname);
-                    network_send(client, packet, n);
+                    snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MOTD Welcome to da server, %s!", nickname);
+                    send_packet(client, packet);
                     cfuhash_put(nicknames_hash, nickname, client);
                     return 0;
                 } else {
@@ -308,4 +308,12 @@ void handle_disconnect(client_t *client) {
 int handle_server_packet(server_t *server, char *packet) {
     printf("Packet from another server [%d]: %s\n", server->conn.fd, packet);
     return 0;
+}
+
+void handle_server_connect(server_t *server) {
+    // tell the server about all the nicknames we know of 
+}
+
+void handle_server_disconnect(server_t *server) {
+    // TODO
 }

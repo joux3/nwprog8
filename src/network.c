@@ -106,9 +106,17 @@ server_t *server_create(int server_fd) {
 }
 
 void server_free(server_t *server) {
-    //handle_disconnect(server);  // TODO: todo handle server disconnect
+    handle_server_disconnect(server); 
     close(server->conn.fd);
     free(server);
+}
+
+void conn_free(conn_t *conn) {
+    if (conn->type == CLIENT) {
+        client_free((client_t*)conn);
+    } else if (conn->type == SERVER) {
+        server_free((server_t*)conn);
+    }
 }
 
 int start_epoll(int client_listen_sock, int server_listen_sock) {
@@ -185,8 +193,9 @@ int accept_connection(int epollfd, int listen_sock, connection_type type) {
     memset(&ev, 0, sizeof(struct epoll_event));
     ev.events = EPOLLIN;
     if (type == SERVER) {
-        ev.data.ptr = server_create(conn_sock); // TODO: server_create can return NULL
-        // TODO server connect
+        server_t *server = server_create(conn_sock); // TODO: server_create can return NULL
+        ev.data.ptr = server;
+        handle_server_connect(server);
     } else if (type == CLIENT) {
         ev.data.ptr = client_create(conn_sock); // TODO: client_create can return NULL
     }
@@ -287,28 +296,28 @@ int read_for_conn(conn_t *conn) {
     }
 }
 
-int network_send(client_t *client, const void *data, const size_t size) {
+int network_send(conn_t *conn, const void *data, const size_t size) {
     size_t bytes_sent = 0;
     while (bytes_sent < size) {
-        int n = write(client->conn.fd, data, size);
+        int n = write(conn->fd, data, size);
         if (n < 0) {
             // Note: this could also be caused by error EWOULDBLOCK or EAGAIN
             // if this happens very often, userland side send buffering could also be used
             // (or kernel side buffers increased)
             perror("write"); 
-            client_free(client); 
+            conn_free(conn); 
             return -1;
         } else if (n == 0) {
-            client_free(client); 
+            conn_free(conn); 
             return -1;
         }
         bytes_sent += n;
     }
     char newline = '\n';
-    int n = write(client->conn.fd, &newline, 1);
+    int n = write(conn->fd, &newline, 1);
     if (n < 0) {
         perror("write"); 
-        client_free(client); 
+        conn_free(conn); 
         return -1;
     } else if (n == 0) {
         return -1;

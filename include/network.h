@@ -38,10 +38,10 @@ typedef struct {
 // inits the network socket and starts running the event loop
 int network_start();
 
-// sends data to the given client
+// sends data to the given connection
 // returns 1 if successful, < 0 if failure
 // (+ closes the connection if failure)
-int network_send(client_t *client, const void *data, const size_t size);
+int network_send(conn_t *conn, const void *data, const size_t size);
 
 // frees data associated with a client_t and closes the related fd
 void client_free(client_t *client);
