@@ -46,7 +46,7 @@ int start_listening() {
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin6_family = AF_INET6;
     servaddr.sin6_addr = in6addr_any;
-    servaddr.sin6_port = htons(13337);
+    servaddr.sin6_port = htons(NETWORK_CLIENT_PORT);
 
     if (bind(listenfd, (struct sockaddr *) &servaddr,
         sizeof(servaddr)) < 0) {
@@ -159,8 +159,6 @@ int accept_connection(int epollfd, int listen_sock) {
 }
 
 // tries to read packets for the given client
-// TODO: BUG: Packets with zero padding are not handled properly -> after first 
-// packet of a client commands are not recoqnized
 int read_for_client(client_t *client) {
     int n = read(client->client_fd, &client->buf[client->buf_used], NETWORK_CLIENT_BUF - client->buf_used);
     if (n > 0) {
