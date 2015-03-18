@@ -12,20 +12,20 @@
 
 int start_listening(uint16_t port);
 int make_nonblock(int);
-int start_epoll(int, int);
+int start_epoll(int, int, char*);
 int accept_connection(int, int, connection_type);
 int read_for_conn(conn_t *conn);
 
-int network_start() {
+int network_start(char *connect_address) {
     int client_listen_sock = start_listening(NETWORK_CLIENT_PORT);
     int server_listen_sock = start_listening(NETWORK_SERVER_PORT);
     if (client_listen_sock < 0 || server_listen_sock < 0) {
         printf("Failed to open server socket for client or server-server communication!\n");
         return -1;
     }
-
+    
     printf("Network started\n");
-    if (start_epoll(client_listen_sock, server_listen_sock) < 0) {
+    if (start_epoll(client_listen_sock, server_listen_sock, connect_address) < 0) {
         return -1;
     }
 
@@ -119,7 +119,7 @@ void conn_free(conn_t *conn) {
     }
 }
 
-int start_epoll(int client_listen_sock, int server_listen_sock) {
+int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_address) {
     struct epoll_event ev, events[NETWORK_MAX_EVENTS];
     int nfds, epollfd;
 
@@ -132,32 +132,32 @@ int start_epoll(int client_listen_sock, int server_listen_sock) {
     }
 
     ev.events = EPOLLIN;
-    ev.data.fd = client_listen_sock;
+    ev.data.ptr = &client_listen_sock;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, client_listen_sock, &ev) == -1) {
         perror("epoll_ctl: client_listen_sock");
         return -1;
     }
 
     ev.events = EPOLLIN;
-    ev.data.fd = server_listen_sock;
+    ev.data.ptr = &server_listen_sock;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, server_listen_sock, &ev) == -1) {
         perror("epoll_ctl: server_listen_sock");
         return -1;
     }
 
     for (;;) {
-        nfds = epoll_wait(epollfd, events, NETWORK_MAX_EVENTS, -1);
+        nfds = epoll_wait(epollfd, events, NETWORK_MAX_EVENTS, 1000);
         if (nfds == -1) {
             perror("epoll_pwait");
             return -1;
 	    }
 
         for (int n = 0; n < nfds; ++n) {
-            if (events[n].data.fd == client_listen_sock) {
+            if (events[n].data.ptr == &client_listen_sock) {
                 if (accept_connection(epollfd, client_listen_sock, CLIENT) < 0) {
                     return -1;
                 }
-            } else if (events[n].data.fd == server_listen_sock) {
+            } else if (events[n].data.ptr == &server_listen_sock) {
                 printf("server conn\n");
                 if (accept_connection(epollfd, server_listen_sock, SERVER) < 0) {
                     return -1;
@@ -168,7 +168,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock) {
                     return -1;
                 }
             } else {
-                // not from listen socket and not about reading? must be a closed socket
+                // not from listening sockets and not about reading? must be a closed socket
                 conn_t *conn = events[n].data.ptr;
                 if (conn->type == CLIENT) {
                     client_free((client_t*)conn);  

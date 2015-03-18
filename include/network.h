@@ -36,7 +36,7 @@ typedef struct {
 } server_t;
 
 // inits the network socket and starts running the event loop
-int network_start();
+int network_start(char *server_address);
 
 // sends data to the given connection
 // returns 1 if successful, < 0 if failure
