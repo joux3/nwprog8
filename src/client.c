@@ -88,15 +88,29 @@ void * send_message(void *ptr) {
 // Listen to server and print to stdin
 void * read_socket(void *ptr) {
 	char rx_buff[MAX_LENGHT];
+	char line[MAX_LENGHT];
 	int n;
 	thdata *data;
 	data = (thdata *) ptr;
 	for(;;) {
 		n = read(data->socket, rx_buff, sizeof(rx_buff));
 		if (n > 0) {
-			printf("%s", rx_buff);
+			char *command = strtok(rx_buff, " ");
+			if (strcmp(command, "MSG") == 0) {
+				strcpy(line, strtok(NULL, " "));
+				strcat(line, ": ");
+				strcat(line, strtok(NULL, "\n"));				
+			} else if (strcmp(command, "MOTD") == 0) {
+				strcpy(line , strtok(NULL, "\n"));
+				
+			} else {
+				strcpy(line, rx_buff);
+			}
+			printf("%s\n", line);
+			memset(line, '\0', sizeof(line));
 		}
 		n = 0;
+		memset(rx_buff, '\0', sizeof(rx_buff));
 		//sleep(1);
 	}
 }	
