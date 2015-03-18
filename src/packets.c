@@ -304,3 +304,8 @@ void handle_disconnect(client_t *client) {
         printf("Unregistered client disconnected\n");
     }
 }
+
+int handle_server_packet(server_t *server, char *packet) {
+    printf("Packet from another server [%d]: %s\n", server->conn.fd, packet);
+    return 0;
+}

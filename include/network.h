@@ -19,10 +19,10 @@ typedef enum {
 typedef struct {
 	int fd;
 	connection_type type;
-} connection_t;
+} conn_t;
 
 typedef struct {
-	connection_t conn;
+	conn_t conn;
 	int buf_used;
 	char buf[NETWORK_CLIENT_BUF];	
 	char nickname[NICKNAME_LENGTH];
@@ -30,7 +30,7 @@ typedef struct {
 } client_t;
 
 typedef struct {
-	connection_t conn;
+	conn_t conn;
 	int buf_used;
 	char buf[NETWORK_SERVER_BUF];	
 } server_t;

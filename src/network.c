@@ -14,7 +14,7 @@ int start_listening(uint16_t port);
 int make_nonblock(int);
 int start_epoll(int, int);
 int accept_connection(int, int, connection_type);
-int read_for_client(client_t *client);
+int read_for_conn(conn_t *conn);
 
 int network_start() {
     int client_listen_sock = start_listening(NETWORK_CLIENT_PORT);
@@ -94,6 +94,23 @@ void client_free(client_t *client) {
     free(client);
 }
 
+server_t *server_create(int server_fd) {
+    server_t *server = malloc(sizeof(server_t));
+    memset(server, 0, sizeof(server_t));
+    if (server != NULL) {
+        server->conn.fd = server_fd;
+        server->conn.type = SERVER;
+        server->buf_used = 0;
+    }
+    return server;
+}
+
+void server_free(server_t *server) {
+    //handle_disconnect(server);  // TODO: todo handle server disconnect
+    close(server->conn.fd);
+    free(server);
+}
+
 int start_epoll(int client_listen_sock, int server_listen_sock) {
     struct epoll_event ev, events[NETWORK_MAX_EVENTS];
     int nfds, epollfd;
@@ -109,7 +126,14 @@ int start_epoll(int client_listen_sock, int server_listen_sock) {
     ev.events = EPOLLIN;
     ev.data.fd = client_listen_sock;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, client_listen_sock, &ev) == -1) {
-        perror("epoll_ctl: listen_sock");
+        perror("epoll_ctl: client_listen_sock");
+        return -1;
+    }
+
+    ev.events = EPOLLIN;
+    ev.data.fd = server_listen_sock;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, server_listen_sock, &ev) == -1) {
+        perror("epoll_ctl: server_listen_sock");
         return -1;
     }
 
@@ -118,7 +142,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock) {
         if (nfds == -1) {
             perror("epoll_pwait");
             return -1;
-        }
+	    }
 
         for (int n = 0; n < nfds; ++n) {
             if (events[n].data.fd == client_listen_sock) {
@@ -126,18 +150,23 @@ int start_epoll(int client_listen_sock, int server_listen_sock) {
                     return -1;
                 }
             } else if (events[n].data.fd == server_listen_sock) {
+                printf("server conn\n");
                 if (accept_connection(epollfd, server_listen_sock, SERVER) < 0) {
                     return -1;
                 }
-            } else if(events[n].events & EPOLLIN) {
-                client_t *client = events[n].data.ptr;
-                if (read_for_client(client) < 0) {
+            } else if (events[n].events & EPOLLIN) {
+                conn_t *conn = events[n].data.ptr;
+                if (read_for_conn(conn) < 0) {
                     return -1;
                 }
             } else {
                 // not from listen socket and not about reading? must be a closed socket
-                client_t *client = events[n].data.ptr;
-                client_free(client);  
+                conn_t *conn = events[n].data.ptr;
+                if (conn->type == CLIENT) {
+                    client_free((client_t*)conn);  
+                } else if (conn->type == SERVER) {
+                    server_free((server_t*)conn);
+                }
             }
         }
     }
@@ -156,7 +185,7 @@ int accept_connection(int epollfd, int listen_sock, connection_type type) {
     memset(&ev, 0, sizeof(struct epoll_event));
     ev.events = EPOLLIN;
     if (type == SERVER) {
-        //ev.data.ptr = server_create();
+        ev.data.ptr = server_create(conn_sock); // TODO: server_create can return NULL
         // TODO server connect
     } else if (type == CLIENT) {
         ev.data.ptr = client_create(conn_sock); // TODO: client_create can return NULL
@@ -169,46 +198,93 @@ int accept_connection(int epollfd, int listen_sock, connection_type type) {
     return 1;
 }
 
-// tries to read packets for the given client
-int read_for_client(client_t *client) {
-    int n = read(client->conn.fd, &client->buf[client->buf_used], NETWORK_CLIENT_BUF - client->buf_used);
-    if (n > 0) {
-        client->buf_used += n;
+// tries to read packets for the given connection
+int read_for_conn(conn_t *conn) {
+    if (conn->type == CLIENT) {
+        client_t *client = (client_t*)conn;
+        int n = read(client->conn.fd, &client->buf[client->buf_used], NETWORK_CLIENT_BUF - client->buf_used);
+        if (n > 0) {
+            client->buf_used += n;
 
-        int packet_start = 0;
-        int packet_size = 1;
-        for (int i = 0; i < client->buf_used; i++) {
-            if (packet_size > NETWORK_MAX_PACKET_SIZE) {
-                printf("Client tried to send a packet too long!\n");
-                client_free(client);
-                return 1;
-            }
-            if (client->buf[i] == '\n') {
-                client->buf[i] = '\0';
-                // pass the packet to the next layer to handle
-                if (handle_packet(client, &client->buf[packet_start]) == STOP_HANDLING) {
+            int packet_start = 0;
+            int packet_size = 1;
+            for (int i = 0; i < client->buf_used; i++) {
+                if (packet_size > NETWORK_MAX_PACKET_SIZE) {
+                    printf("Client tried to send a packet too long!\n");
+                    client_free(client);
                     return 1;
                 }
-                packet_start = i + 1;
-                packet_size = 1;
-            } 
-            packet_size++;
+                if (client->buf[i] == '\n') {
+                    client->buf[i] = '\0';
+                    // pass the packet to the next layer to handle
+                    if (handle_packet(client, &client->buf[packet_start]) == STOP_HANDLING) {
+                        return 1;
+                    }
+                    packet_start = i + 1;
+                    packet_size = 1;
+                } 
+                packet_size++;
+            }
+            // copy the rest to the beginning of the buffer
+            // at this point, packet_size contains length of the broken packet at end
+            if (packet_start != 0 && client->buf_used - packet_start > 0) {
+                memcpy(&client->buf, &client->buf[packet_start], client->buf_used - packet_start);
+            }
+            client->buf_used = client->buf_used - packet_start;
+        } else if (n == 0) {
+            client_free(client);
+        } else {
+            perror("read ");
+            // TODO: check that errno isn't EAGAIN or EWOULDBLOCK 
+            // (though in theory this shouldn't be possible)
+            client_free(client);
         }
-        // copy the rest to the beginning of the buffer
-        // at this point, packet_size contains length of the broken packet at end
-        if (packet_start != 0 && client->buf_used - packet_start > 0) {
-            memcpy(&client->buf, &client->buf[packet_start], client->buf_used - packet_start);
+        return 1; 
+    } else if (conn->type == SERVER) {
+        printf("read from server\n");
+        server_t *server = (server_t*)conn;
+        int n = read(server->conn.fd, &server->buf[server->buf_used], NETWORK_SERVER_BUF - server->buf_used);
+        if (n > 0) {
+            server->buf_used += n;
+
+            int packet_start = 0;
+            int packet_size = 1;
+            for (int i = 0; i < server->buf_used; i++) {
+                if (packet_size > NETWORK_MAX_PACKET_SIZE) {
+                    printf("Server tried to send a packet too long!\n");
+                    server_free(server);
+                    return 1;
+                }
+                if (server->buf[i] == '\n') {
+                    server->buf[i] = '\0';
+                    // pass the packet to the next layer to handle
+                    if (handle_server_packet(server, &server->buf[packet_start]) == STOP_HANDLING) {
+                        return 1;
+                    }
+                    packet_start = i + 1;
+                    packet_size = 1;
+                } 
+                packet_size++;
+            }
+            // copy the rest to the beginning of the buffer
+            // at this point, packet_size contains length of the broken packet at end
+            if (packet_start != 0 && server->buf_used - packet_start > 0) {
+                memcpy(&server->buf, &server->buf[packet_start], server->buf_used - packet_start);
+            }
+            server->buf_used = server->buf_used - packet_start;
+        } else if (n == 0) {
+            server_free(server);
+        } else {
+            perror("read ");
+            // TODO: check that errno isn't EAGAIN or EWOULDBLOCK 
+            // (though in theory this shouldn't be possible)
+            server_free(server);
         }
-        client->buf_used = client->buf_used - packet_start;
-    } else if (n == 0) {
-        client_free(client);
+        return 1; 
     } else {
-        perror("read ");
-        // TODO: check that errno isn't EAGAIN or EWOULDBLOCK 
-        // (though in theory this shouldn't be possible)
-        client_free(client);
+        printf("Unknown conn type!\n");
+        return -1;
     }
-    return 1; 
 }
 
 int network_send(client_t *client, const void *data, const size_t size) {
