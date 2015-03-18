@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include "network.h"
 #include "packets.h"
 
@@ -15,6 +16,7 @@ int make_nonblock(int);
 int start_epoll(int, int, char*);
 int accept_connection(int, int, connection_type);
 int read_for_conn(conn_t *conn);
+int create_connect_fd();
 
 int network_start(char *connect_address) {
     int client_listen_sock = start_listening(NETWORK_CLIENT_PORT);
@@ -122,6 +124,7 @@ void conn_free(conn_t *conn) {
 int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_address) {
     struct epoll_event ev, events[NETWORK_MAX_EVENTS];
     int nfds, epollfd;
+    struct sockaddr_in connect_addr;
 
     memset(&ev, 0, sizeof(struct epoll_event));
 
@@ -145,7 +148,59 @@ int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_ad
         return -1;
     }
 
+    int connect_fd = -1;
+    int connected = 0;
+    int connect_epoll_registered = 0;
+    if (connect_address) {
+        memset(&connect_addr, 0, sizeof(connect_addr));
+        connect_addr.sin_family = AF_INET;
+        connect_addr.sin_port = htons(NETWORK_SERVER_PORT);
+        if (inet_pton(AF_INET, connect_address, &connect_addr.sin_addr) <= 0) {
+            fprintf(stderr, "inet_pton error for %s, illegal address?\n", connect_address);
+            return -1;
+        }
+    }
+    
     for (;;) {
+        if (connect_address) {
+            if (!connected) {
+                connect_fd = create_connect_fd();
+                int res = connect(connect_fd, (struct sockaddr *)&connect_addr, sizeof(connect_addr));
+                printf("Server connecting to network...\n");
+                if (res < 0 && errno != EINPROGRESS) {
+                    perror("connect");
+                    return -1;
+                }
+                connected = 1;
+                connect_epoll_registered = 0;
+            } else {
+                int error;
+                socklen_t error_len = sizeof(error);
+                int res = getsockopt(connect_fd, SOL_SOCKET, SO_ERROR, &error, &error_len) < 0;
+                if (res < 0) {
+                    perror("getsockopt"); 
+                    return -1;
+                } else if (error != 0) { 
+                    printf("connection error %d\n", error);
+                    connected = 0;
+                    close(connect_fd);
+                } else if (!connect_epoll_registered) {
+                    printf("Connected to network!\n");
+                    connect_epoll_registered = 1; 
+                    memset(&ev, 0, sizeof(struct epoll_event));
+                    ev.events = EPOLLIN;
+                    server_t *server = server_create(connect_fd); // TODO: server_create can return NULL
+                    ev.data.ptr = server;
+                    handle_server_connect(server);
+                    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connect_fd,
+                                &ev) == -1) {
+                        perror("epoll_ctl: conn_sock");
+                        return -1;
+                    }
+                }
+            }
+        }
+
         nfds = epoll_wait(epollfd, events, NETWORK_MAX_EVENTS, 1000);
         if (nfds == -1) {
             perror("epoll_pwait");
@@ -323,4 +378,15 @@ int network_send(conn_t *conn, const void *data, const size_t size) {
         return -1;
     }
     return 1;
+}
+
+int create_connect_fd() {
+    int connect_fd;
+    if ((connect_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("socket error");
+        return -1;
+    }     
+
+    make_nonblock(connect_fd);
+    return connect_fd;
 }
