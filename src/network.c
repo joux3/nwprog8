@@ -12,19 +12,20 @@
 
 int start_listening(uint16_t port);
 int make_nonblock(int);
-int start_epoll(int);
+int start_epoll(int, int);
 int accept_connection(int, int);
 int read_for_client(client_t *client);
 
 int network_start() {
-    int listen_sock = start_listening(NETWORK_CLIENT_PORT);
-    if (listen_sock < 0) {
-        printf("Failed to open server socket!");
+    int client_listen_sock = start_listening(NETWORK_CLIENT_PORT);
+    int server_listen_sock = start_listening(NETWORK_SERVER_PORT);
+    if (client_listen_sock < 0 || server_listen_sock < 0) {
+        printf("Failed to open server socket for client or server-server communication!");
         return -1;
     }
 
     printf("Network started\n");
-    if (start_epoll(listen_sock) < 0) {
+    if (start_epoll(client_listen_sock, server_listen_sock) < 0) {
         return -1;
     }
 
@@ -92,7 +93,7 @@ void client_free(client_t *client) {
     free(client);
 }
 
-int start_epoll(int listen_sock) {
+int start_epoll(int client_listen_sock, int server_listen_sock) {
     struct epoll_event ev, events[NETWORK_MAX_EVENTS];
     int nfds, epollfd;
 
@@ -105,8 +106,8 @@ int start_epoll(int listen_sock) {
     }
 
     ev.events = EPOLLIN;
-    ev.data.fd = listen_sock;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_sock, &ev) == -1) {
+    ev.data.fd = client_listen_sock;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, client_listen_sock, &ev) == -1) {
         perror("epoll_ctl: listen_sock");
         return -1;
     }
@@ -119,8 +120,8 @@ int start_epoll(int listen_sock) {
         }
 
         for (int n = 0; n < nfds; ++n) {
-            if (events[n].data.fd == listen_sock) {
-                if (accept_connection(epollfd, listen_sock) < 0) {
+            if (events[n].data.fd == client_listen_sock) {
+                if (accept_connection(epollfd, client_listen_sock) < 0) {
                     return -1;
                 }
             } else if(events[n].events & EPOLLIN) {
