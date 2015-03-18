@@ -3,6 +3,10 @@
 
 #include "chat.h"
 
+typedef enum {
+	SERVER, CLIENT
+} connection_type;
+
 #define NETWORK_MAX_EVENTS 10
 #define NETWORK_LISTEN_Q 10
 #define NETWORK_CLIENT_PORT 13337
@@ -13,12 +17,23 @@
 #define NETWORK_MAX_PACKET_SIZE 256
 
 typedef struct {
-	int client_fd;
+	int fd;
+	connection_type type;
+} connection_t;
+
+typedef struct {
+	connection_t conn;
 	int buf_used;
 	char buf[NETWORK_CLIENT_BUF];	
 	char nickname[NICKNAME_LENGTH];
 	channel_t *channels[USER_MAX_CHANNELS];
 } client_t;
+
+typedef struct {
+	connection_t conn;
+	int buf_used;
+	char buf[NETWORK_SERVER_BUF];	
+} server_t;
 
 // inits the network socket and starts running the event loop
 int network_start();

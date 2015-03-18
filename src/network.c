@@ -13,14 +13,14 @@
 int start_listening(uint16_t port);
 int make_nonblock(int);
 int start_epoll(int, int);
-int accept_connection(int, int);
+int accept_connection(int, int, connection_type);
 int read_for_client(client_t *client);
 
 int network_start() {
     int client_listen_sock = start_listening(NETWORK_CLIENT_PORT);
     int server_listen_sock = start_listening(NETWORK_SERVER_PORT);
     if (client_listen_sock < 0 || server_listen_sock < 0) {
-        printf("Failed to open server socket for client or server-server communication!");
+        printf("Failed to open server socket for client or server-server communication!\n");
         return -1;
     }
 
@@ -79,7 +79,8 @@ client_t *client_create(int client_fd) {
     client_t *client = malloc(sizeof(client_t));
     memset(client, 0, sizeof(client_t));
     if (client != NULL) {
-        client->client_fd = client_fd;
+        client->conn.fd = client_fd;
+        client->conn.type = CLIENT;
         client->buf_used = 0;
         memset(&client->nickname, 0, NICKNAME_LENGTH);
         memset(&client->channels, 0, USER_MAX_CHANNELS * sizeof(channel_t*));
@@ -89,7 +90,7 @@ client_t *client_create(int client_fd) {
 
 void client_free(client_t *client) {
     handle_disconnect(client); 
-    close(client->client_fd);
+    close(client->conn.fd);
     free(client);
 }
 
@@ -121,7 +122,11 @@ int start_epoll(int client_listen_sock, int server_listen_sock) {
 
         for (int n = 0; n < nfds; ++n) {
             if (events[n].data.fd == client_listen_sock) {
-                if (accept_connection(epollfd, client_listen_sock) < 0) {
+                if (accept_connection(epollfd, client_listen_sock, CLIENT) < 0) {
+                    return -1;
+                }
+            } else if (events[n].data.fd == server_listen_sock) {
+                if (accept_connection(epollfd, server_listen_sock, SERVER) < 0) {
                     return -1;
                 }
             } else if(events[n].events & EPOLLIN) {
@@ -138,7 +143,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock) {
     }
 }
 
-int accept_connection(int epollfd, int listen_sock) {
+int accept_connection(int epollfd, int listen_sock, connection_type type) {
     struct epoll_event ev; 
     struct sockaddr_in6 cliaddr;
     socklen_t addrlen = sizeof(cliaddr);
@@ -150,7 +155,12 @@ int accept_connection(int epollfd, int listen_sock) {
     make_nonblock(conn_sock);
     memset(&ev, 0, sizeof(struct epoll_event));
     ev.events = EPOLLIN;
-    ev.data.ptr = client_create(conn_sock); // TODO: client_create can return NULL
+    if (type == SERVER) {
+        //ev.data.ptr = server_create();
+        // TODO server connect
+    } else if (type == CLIENT) {
+        ev.data.ptr = client_create(conn_sock); // TODO: client_create can return NULL
+    }
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_sock,
                 &ev) == -1) {
         perror("epoll_ctl: conn_sock");
@@ -161,7 +171,7 @@ int accept_connection(int epollfd, int listen_sock) {
 
 // tries to read packets for the given client
 int read_for_client(client_t *client) {
-    int n = read(client->client_fd, &client->buf[client->buf_used], NETWORK_CLIENT_BUF - client->buf_used);
+    int n = read(client->conn.fd, &client->buf[client->buf_used], NETWORK_CLIENT_BUF - client->buf_used);
     if (n > 0) {
         client->buf_used += n;
 
@@ -204,7 +214,7 @@ int read_for_client(client_t *client) {
 int network_send(client_t *client, const void *data, const size_t size) {
     size_t bytes_sent = 0;
     while (bytes_sent < size) {
-        int n = write(client->client_fd, data, size);
+        int n = write(client->conn.fd, data, size);
         if (n < 0) {
             // Note: this could also be caused by error EWOULDBLOCK or EAGAIN
             // if this happens very often, userland side send buffering could also be used
@@ -219,7 +229,7 @@ int network_send(client_t *client, const void *data, const size_t size) {
         bytes_sent += n;
     }
     char newline = '\n';
-    int n = write(client->client_fd, &newline, 1);
+    int n = write(client->conn.fd, &newline, 1);
     if (n < 0) {
         perror("write"); 
         client_free(client); 
