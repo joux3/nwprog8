@@ -66,6 +66,17 @@ void channel_broadcast(channel_t *channel, char *packet) {
     } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
 }
 
+void server_broadcast(char *packet) {
+    void *cur_key, *cur_data;
+    size_t key_len, data_len;
+    int more = cfuhash_each_data(servers_hash, &cur_key, &key_len, &cur_data, &data_len);
+    while (more) {
+        server_t *cur_server = (server_t*)cur_key;
+        send_packet((conn_t*)cur_server, packet);
+        more = cfuhash_next_data(servers_hash, &cur_key, &key_len, &cur_data, &data_len);
+    }
+}
+
 void send_channel_names(client_t *client, channel_t *channel) {
     char packet[NETWORK_MAX_PACKET_SIZE];
     memset(packet, 0, NETWORK_MAX_PACKET_SIZE); 
@@ -126,6 +137,9 @@ int handle_unregistered_packet(client_t *client, char *packet) {
                     snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MOTD Welcome to da server, %s!", nickname);
                     send_packet((conn_t*)client, packet);
                     cfuhash_put(nicknames_hash, nickname, client);
+
+                    snprintf(packet, NETWORK_MAX_PACKET_SIZE, "NICK %s", nickname);
+                    server_broadcast(packet);
                     return 0;
                 } else {
                     printf("Unregistered user nickname taken '%s', dropping\n", nickname);
@@ -348,3 +362,4 @@ void handle_server_disconnect(server_t *server) {
     void *data = cfuhash_delete_data(servers_hash, server, sizeof(server));
     assert(data != NULL);
 }
+
