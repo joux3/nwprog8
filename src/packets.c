@@ -6,9 +6,9 @@
 #include "packets.h"
 #include "cfuhash.h"
 
-cfuhash_table_t *nicknames_hash;
-cfuhash_table_t *channels_hash;
-cfuhash_table_t *servers_hash; // not actually a hash, just a server_t -> server_t mapping
+cfuhash_table_t *nicknames_hash; // *char (nickname) -> client_t
+cfuhash_table_t *channels_hash;  // *char (channel name) -> channel_t
+cfuhash_table_t *servers_hash;   // not actually a hash, just a server_t -> server_t mapping
 
 void init_packets() {
     nicknames_hash = cfuhash_new_with_initial_size(1000); 
