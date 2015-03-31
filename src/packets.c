@@ -326,6 +326,10 @@ void handle_disconnect(client_t *client) {
     }
 }
 
+void kill_nickname(char *nickname) {
+    printf("TODO, killing nickname %s\n", nickname);
+}
+
 int handle_server_packet(server_t *server, char *packet) {
     printf("Packet from another server [%d]: %s\n", server->conn.fd, packet);
     // broadcast the packet across rest of the network
@@ -341,7 +345,11 @@ int handle_server_packet(server_t *server, char *packet) {
     }
     // handle the packet
     char *command = strtok(packet, " "); 
-    if (command != NULL && strcmp(command, "NICK") == 0) {
+    if (command == NULL) {
+        return 0;
+    }
+
+    if (strcmp(command, "NICK") == 0) {
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             return 0;
@@ -349,9 +357,19 @@ int handle_server_packet(server_t *server, char *packet) {
         printf("Nickname %s joined the network on another server\n", nickname);
         if (cfuhash_exists(nicknames_hash, nickname)) {
             printf("Nickname collision for '%s'!\n", nickname); 
-            // TODO: send KILL to whole network
+	        char packet[NETWORK_MAX_PACKET_SIZE];
+            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s", nickname);
+            server_broadcast(packet);
+            kill_nickname(nickname);
         } else {
+            // TODO
         }
+    } else if (strcmp(command, "KILL") == 0) {
+        char *nickname = strtok(NULL, " ");
+        if (nickname == NULL) {
+            return 0;
+        }
+        kill_nickname(nickname);
     }
     return 0;
 }
