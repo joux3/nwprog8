@@ -12,9 +12,13 @@ cfuhash_table_t *servers_hash; // not actually a hash, just a server_t -> server
 void init_packets() {
     nicknames_hash = cfuhash_new_with_initial_size(1000); 
     cfuhash_set_flag(nicknames_hash, CFUHASH_IGNORE_CASE); 
+
     channels_hash = cfuhash_new_with_initial_size(1000); 
     cfuhash_set_flag(channels_hash, CFUHASH_IGNORE_CASE); 
+
     servers_hash = cfuhash_new();
+    // don't copy server pointers so that pointer comparison works
+    cfuhash_set_flag(servers_hash, CFUHASH_NOCOPY_KEYS); 
 }
 
 void send_packet(conn_t *conn, char *packet) {
@@ -315,7 +319,7 @@ int handle_server_packet(server_t *server, char *packet) {
     size_t key_len, data_len;
     int more = cfuhash_each_data(servers_hash, &cur_key, &key_len, &cur_data, &data_len);
     while (more) {
-        server_t *cur_server = (server_t*)cur_server;
+        server_t *cur_server = (server_t*)cur_key;
         if (cur_server != server) {
             send_packet((conn_t*)cur_server, packet);
         }
