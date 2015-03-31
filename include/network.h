@@ -43,7 +43,9 @@ int network_start(char *server_address);
 // (+ closes the connection if failure)
 int network_send(conn_t *conn, const void *data, const size_t size);
 
-// frees data associated with a client_t and closes the related fd
+// handles a disconnect, frees data associated with a client_t and closes the related fd
 void client_free(client_t *client);
+// frees data associated with a client_t and closes the related fd
+void client_close(client_t *client);
 
 #endif

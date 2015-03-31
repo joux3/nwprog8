@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <sys/socket.h>
 #include "packets.h"
 #include "cfuhash.h"
 
@@ -285,7 +286,7 @@ int handle_registered_packet(client_t *client, char *packet) {
     return 0;
 }
 
-void remove_from_channels(client_t *client) {
+void remove_from_channels(client_t *client, char *reason) {
     // local nicknames that already know about the disconnect
     cfuhash_table_t *already_sent = cfuhash_new();
     for (int i = 0; i < USER_MAX_CHANNELS; i++) {
@@ -299,7 +300,7 @@ void remove_from_channels(client_t *client) {
                 char *key;
                 client_t *channel_client;
                 char packet[NETWORK_MAX_PACKET_SIZE];
-                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s client disconnected", client->nickname);
+                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nickname, reason);
                 int res = cfuhash_each(channel->clients, &key, (void**)&channel_client);
                 assert(res != 0);
                 do {
@@ -319,15 +320,25 @@ void handle_disconnect(client_t *client) {
     if (is_registered(client)) {
         void *res = cfuhash_delete(nicknames_hash, client->nickname);
         assert(res != NULL);
-        remove_from_channels(client);
+        remove_from_channels(client, "client disconnected");
         printf("Registered user '%s' disconnected\n", client->nickname);
     } else {
         printf("Unregistered client disconnected\n");
     }
 }
 
-void kill_nickname(char *nickname) {
-    printf("TODO, killing nickname %s\n", nickname);
+void kill_nickname(char *nickname, char *reason) {
+    void *res = cfuhash_delete(nicknames_hash, nickname);
+    if (res) {
+        client_t *client = (client_t*)res;
+        remove_from_channels(client, reason);
+        printf("Nickname '%s' killed\n", client->nickname);
+        char packet[NETWORK_MAX_PACKET_SIZE];
+        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nickname, reason);
+        send_packet((conn_t*)client, packet);
+        shutdown(client->conn.fd, SHUT_WR);
+        client_close(client);
+    }
 }
 
 int handle_server_packet(server_t *server, char *packet) {
@@ -358,9 +369,9 @@ int handle_server_packet(server_t *server, char *packet) {
         if (cfuhash_exists(nicknames_hash, nickname)) {
             printf("Nickname collision for '%s'!\n", nickname); 
 	        char packet[NETWORK_MAX_PACKET_SIZE];
-            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s", nickname);
+            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s nickname collision", nickname);
             server_broadcast(packet);
-            kill_nickname(nickname);
+            kill_nickname(nickname, "nickname collision");
         } else {
             // TODO
         }
@@ -369,7 +380,11 @@ int handle_server_packet(server_t *server, char *packet) {
         if (nickname == NULL) {
             return 0;
         }
-        kill_nickname(nickname);
+        char *reason = strtok(NULL, "\n");
+        if (nickname == NULL) {
+            return 0;
+        }
+        kill_nickname(nickname, reason);
     }
     return 0;
 }

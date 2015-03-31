@@ -100,10 +100,14 @@ client_t *client_create(int client_fd) {
     return client;
 }
 
-void client_free(client_t *client) {
-    handle_disconnect(client); 
+void client_close(client_t *client) {
     close(client->conn.fd);
     free(client);
+}
+
+void client_free(client_t *client) {
+    handle_disconnect(client); 
+    client_close(client);
 }
 
 server_t *server_create(int server_fd) {
