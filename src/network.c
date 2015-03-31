@@ -18,6 +18,9 @@ int accept_connection(int, int, connection_type);
 int read_for_conn(conn_t *conn);
 int create_connect_fd();
 
+int connected = 0;
+int connect_fd = -1;
+
 int network_start(char *connect_address) {
     int client_listen_sock = start_listening(NETWORK_CLIENT_PORT);
     int server_listen_sock = start_listening(NETWORK_SERVER_PORT);
@@ -42,6 +45,13 @@ int start_listening(uint16_t port) {
     if ((listenfd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
         perror("socket");
         return -1;
+    }
+
+    // enable SO_REUSEADDR
+    int yes = 1;
+    if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
+    {
+        perror("setsockopt");
     }
 
     // Pick a port and bind socket to it.
@@ -110,6 +120,9 @@ server_t *server_create(int server_fd) {
 void server_free(server_t *server) {
     handle_server_disconnect(server); 
     close(server->conn.fd);
+    if (server->conn.fd == connect_fd) {
+        connected = 0;
+    }
     free(server);
 }
 
@@ -148,8 +161,6 @@ int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_ad
         return -1;
     }
 
-    int connect_fd = -1;
-    int connected = 0;
     int connect_epoll_registered = 0;
     if (connect_address) {
         memset(&connect_addr, 0, sizeof(connect_addr));
