@@ -339,6 +339,20 @@ int handle_server_packet(server_t *server, char *packet) {
         }
         more = cfuhash_next_data(servers_hash, &cur_key, &key_len, &cur_data, &data_len);
     }
+    // handle the packet
+    char *command = strtok(packet, " "); 
+    if (command != NULL && strcmp(command, "NICK") == 0) {
+        char *nickname = strtok(NULL, " ");
+        if (nickname == NULL) {
+            return 0;
+        }
+        printf("Nickname %s joined the network on another server\n", nickname);
+        if (cfuhash_exists(nicknames_hash, nickname)) {
+            printf("Nickname collision for '%s'!\n", nickname); 
+            // TODO: send KILL to whole network
+        } else {
+        }
+    }
     return 0;
 }
 
