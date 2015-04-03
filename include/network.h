@@ -21,15 +21,14 @@ typedef struct {
 	connection_type type;
 } conn_t;
 
-typedef struct {
+typedef struct client_struct {
 	conn_t conn;
 	int buf_used;
 	char buf[NETWORK_CLIENT_BUF];	
-	char nickname[NICKNAME_LENGTH];
-	channel_t *channels[USER_MAX_CHANNELS];
+    localnick_t *nick;
 } client_t;
 
-typedef struct {
+typedef struct server_struct {
 	conn_t conn;
 	int buf_used;
 	char buf[NETWORK_SERVER_BUF];	

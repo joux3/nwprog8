@@ -109,7 +109,7 @@ int handle_unregistered_packet(client_t *client, char *packet);
 int handle_registered_packet(client_t *client, char *packet);
 
 int is_registered(client_t *client) {
-    return client->nickname[0] != '\0';
+    return client->nick->nick.nickname[0] != '\0';
 }
 
 int handle_packet(client_t *client, char *packet) {
@@ -132,7 +132,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
             int nicklen = strlen(nickname);
             if (nicklen > 0 && nicklen < NICKNAME_LENGTH && nickname[0] != '#') {
                 if (!cfuhash_exists(nicknames_hash, nickname)) {
-                    strncpy(client->nickname, nickname, NICKNAME_LENGTH);
+                    strncpy(client->nick->nick.nickname, nickname, NICKNAME_LENGTH);
                     printf("Registered nickname: %s\n", nickname);
 	                char packet[NETWORK_MAX_PACKET_SIZE];
                     snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MOTD Welcome to da server, %s!", nickname);
@@ -164,7 +164,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
 int handle_registered_packet(client_t *client, char *packet) {
     char *command = strtok(packet, " ");
     if (command == NULL) {
-        printf("Illegal packet from %s: %s\n", client->nickname, packet);
+        printf("Illegal packet from %s: %s\n", client->nick->nick.nickname, packet);
         return 0;
     }
     if (strcmp(command, "MSG") == 0) {
@@ -180,14 +180,14 @@ int handle_registered_packet(client_t *client, char *packet) {
             return 0;
         }
 
-        printf("Message from '%s' to '%s': %s\n", client->nickname, destination, msg);
+        printf("Message from '%s' to '%s': %s\n", client->nick->nick.nickname, destination, msg);
         char packet[NETWORK_MAX_PACKET_SIZE];
-        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", client->nickname, destination, msg);
+        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", client->nick->nick.nickname, destination, msg);
         if (cfuhash_exists(nicknames_hash, destination)) {
             send_packet(((conn_t*)cfuhash_get(nicknames_hash, destination)), packet);
         } else if (cfuhash_exists(channels_hash, destination)) {
             channel_t *channel = cfuhash_get(channels_hash, destination);
-            if (!cfuhash_exists(channel->clients, client->nickname)) {
+            if (!cfuhash_exists(channel->clients, client->nick->nick.nickname)) {
                 send_packet((conn_t*)client, "CMDREPLY You need to join the channel first");
                 return 0;
             }
@@ -209,7 +209,7 @@ int handle_registered_packet(client_t *client, char *packet) {
                 send_packet((conn_t*)client, "CMDREPLY You have joined too many channels");
                 return 0;
             }
-            if (client->channels[i] == NULL) {
+            if (client->nick->channels[i] == NULL) {
                 break;
             }
         }
@@ -217,19 +217,19 @@ int handle_registered_packet(client_t *client, char *packet) {
         channel_t *channel = get_or_create_channel(channel_name);
         if (channel == NULL) {
             send_packet((conn_t*)client, "CMDREPLY Joining channel failed, server memory full");
-            printf("User '%s' failed to join channel '%s', get_or_create_channel NULL\n", client->nickname, channel_name);
+            printf("User '%s' failed to join channel '%s', get_or_create_channel NULL\n", client->nick->nick.nickname, channel_name);
             return 0;
         }
-        if (cfuhash_exists(channel->clients, client->nickname)) {
+        if (cfuhash_exists(channel->clients, client->nick->nick.nickname)) {
             send_packet((conn_t*)client, "CMDREPLY You have already joined!");
             return 0;
         }
-        printf("User '%s' joined channel '%s'\n", client->nickname, channel_name);
-        cfuhash_put(channel->clients, client->nickname, client);
-        client->channels[i] = channel;
+        printf("User '%s' joined channel '%s'\n", client->nick->nick.nickname, channel_name);
+        cfuhash_put(channel->clients, client->nick->nick.nickname, client);
+        client->nick->channels[i] = channel;
         // send the join message to users on the channel
         char packet[NETWORK_MAX_PACKET_SIZE];
-        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", client->nickname, channel->name);
+        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", client->nick->nick.nickname, channel->name);
         channel_broadcast(channel, packet);
         send_channel_names(client, channel);
         return 0;
@@ -245,22 +245,22 @@ int handle_registered_packet(client_t *client, char *packet) {
                 send_packet((conn_t*)client, "CMDREPLY You are not on that channel");
                 return 0;
             }
-            if (client->channels[i] && strcasecmp(client->channels[i]->name, channel_name) == 0) {
+            if (client->nick->channels[i] && strcasecmp(client->nick->channels[i]->name, channel_name) == 0) {
                 break;
             }
         }
-        channel_t *channel = client->channels[i];
-        client->channels[i] = NULL;
-        void *res = cfuhash_delete(channel->clients, client->nickname);
+        channel_t *channel = client->nick->channels[i];
+        client->nick->channels[i] = NULL;
+        void *res = cfuhash_delete(channel->clients, client->nick->nick.nickname);
         assert(res != NULL);
         if (cfuhash_num_entries(channel->clients) == 0) {
             channel_destroy(channel); 
         } else {
             char packet[NETWORK_MAX_PACKET_SIZE];
-            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "LEAVE %s %s", client->nickname, channel->name);
+            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "LEAVE %s %s", client->nick->nick.nickname, channel->name);
             channel_broadcast(channel, packet);
         }
-        printf("User '%s' left channel '%s'\n", client->nickname, channel_name);
+        printf("User '%s' left channel '%s'\n", client->nick->nick.nickname, channel_name);
         return 0;
     } else if (strcmp(command, "NAMES") == 0) {
         char *channel_name = strtok(NULL, " ");
@@ -274,15 +274,15 @@ int handle_registered_packet(client_t *client, char *packet) {
                 send_packet((conn_t*)client, "CMDREPLY You are not on that channel");
                 return 0;
             }
-            if (client->channels[i] && strcasecmp(client->channels[i]->name, channel_name) == 0) {
+            if (client->nick->channels[i] && strcasecmp(client->nick->channels[i]->name, channel_name) == 0) {
                 break;
             }
         }
-        channel_t *channel = client->channels[i];
+        channel_t *channel = client->nick->channels[i];
         send_channel_names(client, channel);
         return 0;
     }
-    printf("Unhandled packet from %s: %s\n", client->nickname, packet);
+    printf("Unhandled packet from %s: %s\n", client->nick->nick.nickname, packet);
     return 0;
 }
 
@@ -290,9 +290,9 @@ void remove_from_channels(client_t *client, char *reason) {
     // local nicknames that already know about the disconnect
     cfuhash_table_t *already_sent = cfuhash_new();
     for (int i = 0; i < USER_MAX_CHANNELS; i++) {
-        if (client->channels[i] != NULL) {
-            channel_t *channel = client->channels[i];
-            void *res = cfuhash_delete(channel->clients, client->nickname);
+        if (client->nick->channels[i] != NULL) {
+            channel_t *channel = client->nick->channels[i];
+            void *res = cfuhash_delete(channel->clients, client->nick->nick.nickname);
             assert(res != NULL);
             if (cfuhash_num_entries(channel->clients) == 0) {
                 channel_destroy(channel); 
@@ -300,7 +300,7 @@ void remove_from_channels(client_t *client, char *reason) {
                 char *key;
                 client_t *channel_client;
                 char packet[NETWORK_MAX_PACKET_SIZE];
-                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nickname, reason);
+                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nick->nick.nickname, reason);
                 int res = cfuhash_each(channel->clients, &key, (void**)&channel_client);
                 assert(res != 0);
                 do {
@@ -318,10 +318,10 @@ void remove_from_channels(client_t *client, char *reason) {
 
 void handle_disconnect(client_t *client) {
     if (is_registered(client)) {
-        void *res = cfuhash_delete(nicknames_hash, client->nickname);
+        void *res = cfuhash_delete(nicknames_hash, client->nick->nick.nickname);
         assert(res != NULL);
         remove_from_channels(client, "client disconnected");
-        printf("Registered user '%s' disconnected\n", client->nickname);
+        printf("Registered user '%s' disconnected\n", client->nick->nick.nickname);
     } else {
         printf("Unregistered client disconnected\n");
     }
@@ -332,9 +332,9 @@ void kill_nickname(char *nickname, char *reason) {
     if (res) {
         client_t *client = (client_t*)res;
         remove_from_channels(client, reason);
-        printf("Nickname '%s' killed\n", client->nickname);
+        printf("Nickname '%s' killed\n", client->nick->nick.nickname);
         char packet[NETWORK_MAX_PACKET_SIZE];
-        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nickname, reason);
+        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nick->nick.nickname, reason);
         send_packet((conn_t*)client, packet);
         shutdown(client->conn.fd, SHUT_WR);
         client_close(client);

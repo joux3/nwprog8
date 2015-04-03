@@ -94,14 +94,20 @@ client_t *client_create(int client_fd) {
         client->conn.fd = client_fd;
         client->conn.type = CLIENT;
         client->buf_used = 0;
-        memset(&client->nickname, 0, NICKNAME_LENGTH);
-        memset(&client->channels, 0, USER_MAX_CHANNELS * sizeof(channel_t*));
+        localnick_t *nick = malloc(sizeof(localnick_t));
+        // TODO nick == NULL
+        client->nick = nick;
+        nick->client = client;
+        nick->nick.type = LOCAL;
+        memset(&nick->nick.nickname, 0, NICKNAME_LENGTH);
+        memset(&nick->channels, 0, USER_MAX_CHANNELS * sizeof(channel_t*));
     }
     return client;
 }
 
 void client_close(client_t *client) {
     close(client->conn.fd);
+    free(client->nick);
     free(client);
 }
 
