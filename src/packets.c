@@ -6,7 +6,7 @@
 #include "packets.h"
 #include "cfuhash.h"
 
-cfuhash_table_t *nicknames_hash; // *char (nickname) -> client_t
+cfuhash_table_t *nicknames_hash; // *char (nickname) -> nickname_t
 cfuhash_table_t *channels_hash;  // *char (channel name) -> channel_t
 cfuhash_table_t *servers_hash;   // not actually a hash, just a server_t -> server_t mapping
 
@@ -24,6 +24,16 @@ void init_packets() {
 
 void send_packet(conn_t *conn, char *packet) {
     network_send(conn, packet, strlen(packet));
+}
+
+conn_t *get_conn_for(nickname_t *nick) {
+    if (nick->type == LOCAL) {
+        return (conn_t*)(((localnick_t*)nick)->client);
+    } else if (nick->type == REMOTE) {
+        return (conn_t*)(((remotenick_t*)nick)->server);
+    } else {
+        assert(0);
+    }
 }
 
 channel_t *channel_create(char *channel_name) {
@@ -139,7 +149,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
 	                char packet[NETWORK_MAX_PACKET_SIZE];
                     snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MOTD Welcome to da server, %s!", nickname);
                     send_packet((conn_t*)client, packet);
-                    cfuhash_put(nicknames_hash, nickname, client);
+                    cfuhash_put(nicknames_hash, nickname, client->nick);
 
                     snprintf(packet, NETWORK_MAX_PACKET_SIZE, "NICK %s", nickname);
                     server_broadcast(packet);
@@ -186,7 +196,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         char packet[NETWORK_MAX_PACKET_SIZE];
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", client->nick->nick.nickname, destination, msg);
         if (cfuhash_exists(nicknames_hash, destination)) {
-            send_packet(((conn_t*)cfuhash_get(nicknames_hash, destination)), packet);
+            send_packet(get_conn_for((nickname_t*)cfuhash_get(nicknames_hash, destination)), packet);
         } else if (cfuhash_exists(channels_hash, destination)) {
             channel_t *channel = cfuhash_get(channels_hash, destination);
             if (!cfuhash_exists(channel->nicknames, client->nick->nick.nickname)) {
@@ -333,16 +343,24 @@ void handle_disconnect(client_t *client) {
 }
 
 void kill_nickname(char *nickname, char *reason) {
-    void *res = cfuhash_delete(nicknames_hash, nickname);
+    nickname_t *res = (nickname_t*)cfuhash_delete(nicknames_hash, nickname);
     if (res) {
-        client_t *client = (client_t*)res;
-        remove_from_channels(client, reason);
-        printf("Nickname '%s' killed\n", client->nick->nick.nickname);
-        char packet[NETWORK_MAX_PACKET_SIZE];
-        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nick->nick.nickname, reason);
-        send_packet((conn_t*)client, packet);
-        shutdown(client->conn.fd, SHUT_WR);
-        client_close(client);
+        if (res->type == LOCAL) {
+            client_t *client = ((localnick_t*)res)->client;
+            remove_from_channels(client, reason);
+            printf("Nickname '%s' killed\n", client->nick->nick.nickname);
+            char packet[NETWORK_MAX_PACKET_SIZE];
+            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nick->nick.nickname, reason);
+            send_packet((conn_t*)client, packet);
+            shutdown(client->conn.fd, SHUT_WR);
+            client_close(client);
+        } else if (res->type == REMOTE) {
+            // TODO remove from channels
+            //remove_from_channels(client, reason);
+            printf("Nickname '%s' killed\n", res->nickname);
+        } else {
+            assert(0);
+        }
     }
 }
 
@@ -404,6 +422,7 @@ void handle_server_connect(server_t *server) {
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "NICK %s", nickname);
         send_packet((conn_t*)server, packet);
         res = cfuhash_next(nicknames_hash, &nickname, &data);
+        // TODO: tell the server about all the channels for each and every nick
     }
     cfuhash_put_data(servers_hash, server, sizeof(server), server, sizeof(server), NULL);
 }
