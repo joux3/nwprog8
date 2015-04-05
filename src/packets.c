@@ -540,10 +540,48 @@ void handle_server_connect(server_t *server) {
     cfuhash_put_data(servers_hash, server, sizeof(server), server, sizeof(server), NULL);
 }
 
+int remove_from_server(void *key, size_t key_size, void *data, size_t data_size, void *arg) {
+    key = key; // skip unused warnings. we don't really need those parameters
+    key_size = key_size;
+    data_size = data_size;
+    // return true to remove from nicknames_hash
+    nickname_t *nick = (nickname_t*)data;
+    if (nick->type != REMOTE) {
+        return 0;
+    }
+    remotenick_t *remotenick = (remotenick_t*)nick;
+    if (remotenick->server == (server_t*)arg) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+void free_nickname(void *data) {
+    free(data);
+}
+
 void handle_server_disconnect(server_t *server) {
-    // TODO kill all the nicknames associated with this server
     printf("Server %d disconnected\n", server->conn.fd);
     void *data = cfuhash_delete_data(servers_hash, server, sizeof(server));
     assert(data != NULL);
+    // kill all the nicknames associated with this server
+    char packet[NETWORK_MAX_PACKET_SIZE];
+    char *nickname;
+    nickname_t *nickname_struct;
+    int res = cfuhash_each(nicknames_hash, &nickname, (void**)&nickname_struct);
+    while (res != 0) {
+        if (nickname_struct->type == REMOTE) {
+            remotenick_t *remotenick = (remotenick_t*)nickname_struct;
+            if (remotenick->server == server) {
+                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s netsplit", nickname);
+                server_broadcast(packet);
+                remove_from_channels(nickname_struct, "netsplit");
+            }
+        }
+        res = cfuhash_next(nicknames_hash, &nickname, (void**)&nickname_struct);
+    }
+    // finally remove from the nicknames from the hashtable
+    cfuhash_foreach_remove(nicknames_hash, &remove_from_server, &free_nickname, server);
 }
 
