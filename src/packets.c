@@ -67,18 +67,6 @@ void channel_destroy(channel_t *channel) {
     free(channel);
 }
 
-void channel_broadcast(channel_t *channel, char *packet) {
-    char *key;
-    nickname_t *channel_nick;
-    int res = cfuhash_each(channel->nicknames, &key, (void**)&channel_nick);
-    assert(res != 0);
-    do {
-        if (channel_nick->type == LOCAL) {
-            send_packet((conn_t*)(((localnick_t*)channel_nick)->client), packet);
-        }
-    } while (cfuhash_next(channel->nicknames, &key, (void**)&channel_nick));
-}
-
 void server_broadcast(char *packet) {
     void *cur_key, *cur_data;
     size_t key_len, data_len;
@@ -88,6 +76,21 @@ void server_broadcast(char *packet) {
         send_packet((conn_t*)cur_server, packet);
         more = cfuhash_next_data(servers_hash, &cur_key, &key_len, &cur_data, &data_len);
     }
+}
+
+void channel_broadcast(channel_t *channel, char *packet, int broadcast_servers) {
+    if (broadcast_servers) {
+        server_broadcast(packet);
+    }
+    char *key;
+    nickname_t *channel_nick;
+    int res = cfuhash_each(channel->nicknames, &key, (void**)&channel_nick);
+    assert(res != 0);
+    do {
+        if (channel_nick->type == LOCAL) {
+            send_packet((conn_t*)(((localnick_t*)channel_nick)->client), packet);
+        }
+    } while (cfuhash_next(channel->nicknames, &key, (void**)&channel_nick));
 }
 
 void send_channel_names(client_t *client, channel_t *channel) {
@@ -203,7 +206,7 @@ int handle_registered_packet(client_t *client, char *packet) {
                 send_packet((conn_t*)client, "CMDREPLY You need to join the channel first");
                 return 0;
             }
-            channel_broadcast(channel, packet);
+            channel_broadcast(channel, packet, 1);
         } else {
             send_packet((conn_t*)client, "CMDREPLY Nickname or channel not found");
         }
@@ -242,7 +245,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         // send the join message to users on the channel
         char packet[NETWORK_MAX_PACKET_SIZE];
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", client->nick->nick.nickname, channel->name);
-        channel_broadcast(channel, packet);
+        channel_broadcast(channel, packet, 1);
         send_channel_names(client, channel);
         return 0;
     } else if (strcmp(command, "LEAVE") == 0) {
@@ -270,7 +273,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         } else {
             char packet[NETWORK_MAX_PACKET_SIZE];
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "LEAVE %s %s", client->nick->nick.nickname, channel->name);
-            channel_broadcast(channel, packet);
+            channel_broadcast(channel, packet, 1);
         }
         printf("User '%s' left channel '%s'\n", client->nick->nick.nickname, channel_name);
         return 0;
@@ -415,9 +418,6 @@ int handle_server_packet(server_t *server, char *packet) {
         }
         kill_nickname(nickname, reason);
     } else if (strcmp(command, "MSG") == 0) {
-        if (strcmp(command, "MSG") != 0) {
-            return 0;
-        }
         char *sender = strtok(NULL, " ");
         if (sender == NULL) {
             return 0;
@@ -437,6 +437,26 @@ int handle_server_packet(server_t *server, char *packet) {
                 snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", sender, destination, msg);
                 send_packet(get_conn_for(target), packet);
             }
+        }
+    } else if (strcmp(command, "JOIN") == 0) {
+        char *nickname = strtok(NULL, " ");
+        if (nickname == NULL) {
+            return 0;
+        }
+        char *channel_name = strtok(NULL, "\n");
+        if (channel_name == NULL) {
+            return 0;
+        }
+        nickname_t *nick = cfuhash_get(nicknames_hash, nickname);
+        if (nick && nick->type == REMOTE &&
+            ((remotenick_t*)nick)->server == server) {
+            channel_t *channel = get_or_create_channel(channel_name);
+            cfuhash_put(channel->nicknames, nick->nickname, nick);
+            char packet[NETWORK_MAX_PACKET_SIZE];
+            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", nick->nickname, channel->name);
+            channel_broadcast(channel, packet, 0);
+        } else {
+            printf("Received a packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
         }
     }
     return 0;
