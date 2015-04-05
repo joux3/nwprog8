@@ -341,7 +341,9 @@ void handle_disconnect(client_t *client) {
         assert(res != NULL);
         remove_from_channels(client, "client disconnected");
         printf("Registered user '%s' disconnected\n", client->nick->nick.nickname);
-        // TODO tell other servers about the disconnect
+        char packet[NETWORK_MAX_PACKET_SIZE];
+        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s client disconnected", client->nick->nick.nickname);
+        server_broadcast(packet);
     } else {
         printf("Unregistered client disconnected\n");
     }
@@ -506,8 +508,8 @@ void handle_server_connect(server_t *server) {
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "NICK %s", nickname);
         send_packet((conn_t*)server, packet);
         res = cfuhash_next(nicknames_hash, &nickname, &data);
-        // TODO: tell the server about all the channels for each and every nick
     }
+    // TODO: tell the server about all the channels for each and every nick
     cfuhash_put_data(servers_hash, server, sizeof(server), server, sizeof(server), NULL);
 }
 
