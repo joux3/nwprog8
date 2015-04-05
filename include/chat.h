@@ -11,7 +11,7 @@
 
 typedef struct {
     char name[CHANNEL_LENGTH];
-    cfuhash_table_t *clients; // nickname -> client_t
+    cfuhash_table_t *nicknames; // nickname -> nickname_t
 } channel_t;
 
 typedef enum {

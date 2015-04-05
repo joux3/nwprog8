@@ -32,8 +32,8 @@ channel_t *channel_create(char *channel_name) {
         return NULL;
     printf("Created channel %s\n", channel_name);
     strncpy(channel->name, channel_name, CHANNEL_LENGTH);
-    channel->clients = cfuhash_new();
-    cfuhash_set_flag(channel->clients, CFUHASH_IGNORE_CASE); 
+    channel->nicknames = cfuhash_new();
+    cfuhash_set_flag(channel->nicknames, CFUHASH_IGNORE_CASE); 
     return channel;
 }
 
@@ -52,19 +52,21 @@ void channel_destroy(channel_t *channel) {
     printf("Destroying channel %s\n", channel->name);
     void *res = cfuhash_delete(channels_hash, channel->name);
     assert(res != NULL);
-    assert(cfuhash_num_entries(channel->clients) == 0);
-    cfuhash_destroy(channel->clients);
+    assert(cfuhash_num_entries(channel->nicknames) == 0);
+    cfuhash_destroy(channel->nicknames);
     free(channel);
 }
 
 void channel_broadcast(channel_t *channel, char *packet) {
     char *key;
-    client_t *channel_client;
-    int res = cfuhash_each(channel->clients, &key, (void**)&channel_client);
+    nickname_t *channel_nick;
+    int res = cfuhash_each(channel->nicknames, &key, (void**)&channel_nick);
     assert(res != 0);
     do {
-        send_packet((conn_t*)channel_client, packet);
-    } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
+        if (channel_nick->type == LOCAL) {
+            send_packet((conn_t*)(((localnick_t*)channel_nick)->client), packet);
+        }
+    } while (cfuhash_next(channel->nicknames, &key, (void**)&channel_nick));
 }
 
 void server_broadcast(char *packet) {
@@ -84,8 +86,8 @@ void send_channel_names(client_t *client, channel_t *channel) {
     int packet_header_size = snprintf(packet, NETWORK_MAX_PACKET_SIZE, "NAMES %s", channel->name);
     int current_start = packet_header_size;
     char *nick;
-    client_t *channel_client;
-    int res = cfuhash_each(channel->clients, &nick, (void**)&channel_client);
+    nickname_t *channel_nick;
+    int res = cfuhash_each(channel->nicknames, &nick, (void**)&channel_nick);
     assert(res != 0);
     do {
         int nicklen = strlen(nick);
@@ -99,7 +101,7 @@ void send_channel_names(client_t *client, channel_t *channel) {
         packet[current_start] = ' ';
         strcpy(&packet[current_start + 1], nick);
         current_start += nicklen + 1;
-    } while (cfuhash_next(channel->clients, &nick, (void**)&channel_client));
+    } while (cfuhash_next(channel->nicknames, &nick, (void**)&channel_nick));
     if (current_start != packet_header_size) {
         send_packet((conn_t*)client, packet);
     }
@@ -187,7 +189,7 @@ int handle_registered_packet(client_t *client, char *packet) {
             send_packet(((conn_t*)cfuhash_get(nicknames_hash, destination)), packet);
         } else if (cfuhash_exists(channels_hash, destination)) {
             channel_t *channel = cfuhash_get(channels_hash, destination);
-            if (!cfuhash_exists(channel->clients, client->nick->nick.nickname)) {
+            if (!cfuhash_exists(channel->nicknames, client->nick->nick.nickname)) {
                 send_packet((conn_t*)client, "CMDREPLY You need to join the channel first");
                 return 0;
             }
@@ -220,12 +222,12 @@ int handle_registered_packet(client_t *client, char *packet) {
             printf("User '%s' failed to join channel '%s', get_or_create_channel NULL\n", client->nick->nick.nickname, channel_name);
             return 0;
         }
-        if (cfuhash_exists(channel->clients, client->nick->nick.nickname)) {
+        if (cfuhash_exists(channel->nicknames, client->nick->nick.nickname)) {
             send_packet((conn_t*)client, "CMDREPLY You have already joined!");
             return 0;
         }
         printf("User '%s' joined channel '%s'\n", client->nick->nick.nickname, channel_name);
-        cfuhash_put(channel->clients, client->nick->nick.nickname, client);
+        cfuhash_put(channel->nicknames, client->nick->nick.nickname, client->nick);
         client->nick->nick.channels[i] = channel;
         // send the join message to users on the channel
         char packet[NETWORK_MAX_PACKET_SIZE];
@@ -251,9 +253,9 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
         channel_t *channel = client->nick->nick.channels[i];
         client->nick->nick.channels[i] = NULL;
-        void *res = cfuhash_delete(channel->clients, client->nick->nick.nickname);
+        void *res = cfuhash_delete(channel->nicknames, client->nick->nick.nickname);
         assert(res != NULL);
-        if (cfuhash_num_entries(channel->clients) == 0) {
+        if (cfuhash_num_entries(channel->nicknames) == 0) {
             channel_destroy(channel); 
         } else {
             char packet[NETWORK_MAX_PACKET_SIZE];
@@ -292,24 +294,27 @@ void remove_from_channels(client_t *client, char *reason) {
     for (int i = 0; i < USER_MAX_CHANNELS; i++) {
         if (client->nick->nick.channels[i] != NULL) {
             channel_t *channel = client->nick->nick.channels[i];
-            void *res = cfuhash_delete(channel->clients, client->nick->nick.nickname);
+            void *res = cfuhash_delete(channel->nicknames, client->nick->nick.nickname);
             assert(res != NULL);
-            if (cfuhash_num_entries(channel->clients) == 0) {
+            if (cfuhash_num_entries(channel->nicknames) == 0) {
                 channel_destroy(channel); 
             } else {
                 char *key;
-                client_t *channel_client;
+                nickname_t *channel_nick;
                 char packet[NETWORK_MAX_PACKET_SIZE];
                 snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nick->nick.nickname, reason);
-                int res = cfuhash_each(channel->clients, &key, (void**)&channel_client);
+                int res = cfuhash_each(channel->nicknames, &key, (void**)&channel_nick);
                 assert(res != 0);
                 do {
-                    if (!cfuhash_exists_data(already_sent, channel_client, sizeof(client_t*))) {
-                        // only send if the client doesn't already know about the disconnect
-                        send_packet((conn_t*)channel_client, packet);
-                        cfuhash_put_data(already_sent, channel_client, sizeof(client_t*), NULL, 0, NULL);
+                    if (channel_nick->type == LOCAL) {
+                        client_t *channel_client = ((localnick_t*)channel_nick)->client;
+                        if (!cfuhash_exists_data(already_sent, channel_client, sizeof(client_t*))) {
+                            // only send if the client doesn't already know about the disconnect
+                            send_packet((conn_t*)channel_client, packet);
+                            cfuhash_put_data(already_sent, channel_client, sizeof(client_t*), NULL, 0, NULL);
+                        }
                     }
-                } while (cfuhash_next(channel->clients, &key, (void**)&channel_client));
+                } while (cfuhash_next(channel->nicknames, &key, (void**)&channel_nick));
             }
         }
     }
