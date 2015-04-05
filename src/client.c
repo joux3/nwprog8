@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <ctype.h>
+#include <time.h>
 #include "cfuhash.h"
 
 #define MAX_LENGTH 256
@@ -84,6 +85,7 @@ typedef struct sock_thdata
 
 typedef struct {
 	char message[MAX_LENGTH];
+	struct tm *tm_p;
 	
 } message_t;
 
@@ -193,9 +195,14 @@ void * send_message(void *ptr) {
 void * read_socket(void *ptr) {
 	char rx_buff[MAX_LENGTH];
 	char line[MAX_LENGTH];
+	char tmp[MAX_LENGTH];
 	int read_n = 0;
 	thdata *data;
 	data = (thdata *) ptr;
+	
+	time_t msg_time;
+	struct tm *tm_p;
+	
 	
 	for(;;) {
 		memset(rx_buff, 0, sizeof(rx_buff));
@@ -209,38 +216,47 @@ void * read_socket(void *ptr) {
 			char *rx_line_next = strtok(NULL, "\n");
 			char *command = strtok(rx_line, " ");
 			
+			msg_time = time(NULL);
+			tm_p = localtime(&msg_time);
+			sprintf(tmp, "[%.2d:%.2d] ", tm_p->tm_hour, tm_p->tm_min);
+			strcpy(line, tmp);
+		
 			if (strcmp(command, "MSG") == 0) {
+				
 				char *sender = strtok(NULL, " ");
 				char *channel_name = strcpy(line, strtok(NULL, " "));
 				if (strcmp(current_channel->name, channel_name) == 0) {
-					strcpy(line, sender);
+					strcpy(line, tmp);
+					strcat(line, sender);
 					strcat(line, "> ");
 					strcat(line, strtok(NULL, "\n"));
+					
+					
 				}	
 							
 			} else if (strcmp(command, "MOTD") == 0) {
-				strcpy(line, COLOR_GREEN);
+				strcat(line, COLOR_GREEN);
 				strcat(line , strtok(NULL, "\n"));
 				strcat(line, COLOR_RESET);
 				
 			} else if (strcmp(command, "CLOSE") == 0) {
-				strcpy(line, "Server closed connection: ");
+				strcat(line, "Server closed connection: ");
 				strcat(line, strtok(NULL, "\n"));
 				
 			} else if (strcmp(command, "KILL") == 0) {
-				strcpy(line, COLOR_CYAN);
+				strcat(line, COLOR_CYAN);
 				strcat(line, strtok(NULL, " "));
 				strcat(line, COLOR_RESET);
 				strcat(line, " was disconnected: ");
 				strcat(line, strtok(NULL, "\n"));
 				
 			} else if (strcmp(command, "LEAVE") == 0) {
-				strcpy(line, strtok(NULL, " "));
+				strcat(line, strtok(NULL, " "));
 				strcat(line, " left the channel ");
 				strcat(line, strtok(NULL, "\n"));
 				
 			} else if (strcmp(command, "NAMES") == 0) {
-				strcpy(line, "Users on ");
+				strcat(line, "Users on ");
 				strcat(line, strtok(NULL, " "));
 				strcat(line, ": ");
 				strcat(line, COLOR_CYAN);
@@ -248,7 +264,7 @@ void * read_socket(void *ptr) {
 				strcat(line, COLOR_RESET);
 				
 			} else if (strcmp(command, "JOIN") == 0) {
-				strcpy(line, COLOR_CYAN);
+				strcat(line, COLOR_CYAN);
 				strcat(line, strtok(NULL, " "));
 				strcat(line, COLOR_RESET);
 				strcat(line, " joined the channel");
@@ -287,6 +303,8 @@ int main(int argc, char **argv) {
 	
 	sockfd = tcp_connect(argv[2], argv[3]);
 	printf("###Type '/help'for commands\n");
+	
+	
 	
 	data_r.thread_no = 1;
 	data_r.socket = sockfd;
