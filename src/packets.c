@@ -302,13 +302,13 @@ int handle_registered_packet(client_t *client, char *packet) {
     return 0;
 }
 
-void remove_from_channels(client_t *client, char *reason) {
+void remove_from_channels(nickname_t *nick, char *reason) {
     // local nicknames that already know about the disconnect
     cfuhash_table_t *already_sent = cfuhash_new();
     for (int i = 0; i < USER_MAX_CHANNELS; i++) {
-        if (client->nick->nick.channels[i] != NULL) {
-            channel_t *channel = client->nick->nick.channels[i];
-            void *res = cfuhash_delete(channel->nicknames, client->nick->nick.nickname);
+        if (nick->channels[i] != NULL) {
+            channel_t *channel = nick->channels[i];
+            void *res = cfuhash_delete(channel->nicknames, nick->nickname);
             assert(res != NULL);
             if (cfuhash_num_entries(channel->nicknames) == 0) {
                 channel_destroy(channel); 
@@ -316,7 +316,7 @@ void remove_from_channels(client_t *client, char *reason) {
                 char *key;
                 nickname_t *channel_nick;
                 char packet[NETWORK_MAX_PACKET_SIZE];
-                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nick->nick.nickname, reason);
+                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", nick->nickname, reason);
                 int res = cfuhash_each(channel->nicknames, &key, (void**)&channel_nick);
                 assert(res != 0);
                 do {
@@ -339,7 +339,7 @@ void handle_disconnect(client_t *client) {
     if (is_registered(client)) {
         void *res = cfuhash_delete(nicknames_hash, client->nick->nick.nickname);
         assert(res != NULL);
-        remove_from_channels(client, "client disconnected");
+        remove_from_channels((nickname_t*)client->nick, "client disconnected");
         printf("Registered user '%s' disconnected\n", client->nick->nick.nickname);
         char packet[NETWORK_MAX_PACKET_SIZE];
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s client disconnected", client->nick->nick.nickname);
@@ -354,7 +354,7 @@ void kill_nickname(char *nickname, char *reason) {
     if (res) {
         if (res->type == LOCAL) {
             client_t *client = ((localnick_t*)res)->client;
-            remove_from_channels(client, reason);
+            remove_from_channels(res, reason);
             printf("Nickname '%s' killed\n", client->nick->nick.nickname);
             char packet[NETWORK_MAX_PACKET_SIZE];
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nick->nick.nickname, reason);
@@ -362,9 +362,9 @@ void kill_nickname(char *nickname, char *reason) {
             shutdown(client->conn.fd, SHUT_WR);
             client_close(client);
         } else if (res->type == REMOTE) {
-            // TODO remove from channels
-            //remove_from_channels(client, reason);
+            remove_from_channels(res, reason);
             printf("Nickname '%s' killed\n", res->nickname);
+            free(res);
         } else {
             assert(0);
         }
@@ -463,6 +463,15 @@ int handle_server_packet(server_t *server, char *packet) {
             char packet[NETWORK_MAX_PACKET_SIZE];
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", nick->nickname, channel->name);
             channel_broadcast(channel, packet, 0);
+            int placed = 0;
+            for (int i = 0; i < USER_MAX_CHANNELS; i++) {
+                if (nick->channels[i] == NULL) {
+                    nick->channels[i] = channel;
+                    placed = 1; 
+                    break;
+                }
+            }
+            assert(placed);
         } else {
             printf("Received a JOIN packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
             return 0;
@@ -481,6 +490,17 @@ int handle_server_packet(server_t *server, char *packet) {
             ((remotenick_t*)nick)->server == server) {
             channel_t *channel = cfuhash_get(channels_hash, channel_name);
             if (channel && cfuhash_exists(channel->nicknames, nick->nickname)) {
+                int removed = 0;
+                for (int i = 0; i < USER_MAX_CHANNELS; i++) {
+                    if (nick->channels[i] == channel) {
+                        nick->channels[i] = NULL;
+                        removed = 1;
+                        break;
+                    }
+                }
+                if (!removed) {
+                    printf("POSSIBLE CRITICAL FAILURE, channel_t thinks user is on channel but nickname_t doesn't!\n");
+                }
                 cfuhash_delete(channel->nicknames, nick->nickname); 
                 if (cfuhash_num_entries(channel->nicknames) == 0) {
                     channel_destroy(channel);
