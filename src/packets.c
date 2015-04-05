@@ -414,6 +414,30 @@ int handle_server_packet(server_t *server, char *packet) {
             return 0;
         }
         kill_nickname(nickname, reason);
+    } else if (strcmp(command, "MSG") == 0) {
+        if (strcmp(command, "MSG") != 0) {
+            return 0;
+        }
+        char *sender = strtok(NULL, " ");
+        if (sender == NULL) {
+            return 0;
+        }
+        char *destination = strtok(NULL, " ");
+        if (destination == NULL) {
+            return 0;
+        }
+        char *msg = strtok(NULL, "\n");
+        if (msg == NULL) {
+            return 0;
+        }
+        if (cfuhash_exists(nicknames_hash, destination)) {
+            nickname_t *target = (nickname_t*)cfuhash_get(nicknames_hash, destination);
+            if (target->type == LOCAL) {
+                char packet[NETWORK_MAX_PACKET_SIZE];
+                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", sender, destination, msg);
+                send_packet(get_conn_for(target), packet);
+            }
+        }
     }
     return 0;
 }
