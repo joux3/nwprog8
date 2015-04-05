@@ -100,7 +100,7 @@ client_t *client_create(int client_fd) {
         nick->client = client;
         nick->nick.type = LOCAL;
         memset(&nick->nick.nickname, 0, NICKNAME_LENGTH);
-        memset(&nick->channels, 0, USER_MAX_CHANNELS * sizeof(channel_t*));
+        memset(&nick->nick.channels, 0, USER_MAX_CHANNELS * sizeof(channel_t*));
     }
     return client;
 }
