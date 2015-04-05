@@ -328,7 +328,6 @@ int read_for_conn(conn_t *conn) {
     } else if (conn->type == SERVER) {
         server_t *server = (server_t*)conn;
         int n = read(server->conn.fd, &server->buf[server->buf_used], NETWORK_SERVER_BUF - server->buf_used);
-        printf("read from server, bytes %d\n", n);
         if (n > 0) {
             server->buf_used += n;
 
