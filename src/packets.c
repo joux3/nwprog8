@@ -268,11 +268,12 @@ int handle_registered_packet(client_t *client, char *packet) {
         client->nick->channels[i] = NULL;
         void *res = cfuhash_delete(channel->nicknames, client->nick->nick.nickname);
         assert(res != NULL);
+        char packet[NETWORK_MAX_PACKET_SIZE];
+        snprintf(packet, NETWORK_MAX_PACKET_SIZE, "LEAVE %s %s", client->nick->nick.nickname, channel->name);
         if (cfuhash_num_entries(channel->nicknames) == 0) {
             channel_destroy(channel); 
+            server_broadcast(packet);
         } else {
-            char packet[NETWORK_MAX_PACKET_SIZE];
-            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "LEAVE %s %s", client->nick->nick.nickname, channel->name);
             channel_broadcast(channel, packet, 1);
         }
         printf("User '%s' left channel '%s'\n", client->nick->nick.nickname, channel_name);
@@ -461,7 +462,35 @@ int handle_server_packet(server_t *server, char *packet) {
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", nick->nickname, channel->name);
             channel_broadcast(channel, packet, 0);
         } else {
-            printf("Received a packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
+            printf("Received a JOIN packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
+            return 0;
+        }
+    } else if (strcmp(command, "LEAVE") == 0) {
+        char *nickname = strtok(NULL, " ");
+        if (nickname == NULL) {
+            return 0;
+        }
+        char *channel_name = strtok(NULL, "\n");
+        if (channel_name == NULL) {
+            return 0;
+        }
+        nickname_t *nick = cfuhash_get(nicknames_hash, nickname);
+        if (nick && nick->type == REMOTE &&
+            ((remotenick_t*)nick)->server == server) {
+            channel_t *channel = cfuhash_get(channels_hash, channel_name);
+            if (channel && cfuhash_exists(channel->nicknames, nick->nickname)) {
+                cfuhash_delete(channel->nicknames, nick->nickname); 
+                if (cfuhash_num_entries(channel->nicknames) == 0) {
+                    channel_destroy(channel);
+                } else {
+                    char packet[NETWORK_MAX_PACKET_SIZE];
+                    snprintf(packet, NETWORK_MAX_PACKET_SIZE, "LEAVE %s %s", nick->nickname, channel->name);
+                    channel_broadcast(channel, packet, 0);
+                }
+            }
+        } else {
+            printf("Received a LEAVE packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
+            return 0;
         }
     }
     return 0;
