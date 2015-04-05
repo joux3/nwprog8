@@ -437,6 +437,11 @@ int handle_server_packet(server_t *server, char *packet) {
                 snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", sender, destination, msg);
                 send_packet(get_conn_for(target), packet);
             }
+        } else if (cfuhash_exists(channels_hash, destination)) {
+            channel_t *channel = (channel_t*)cfuhash_get(channels_hash, destination);
+            char packet[NETWORK_MAX_PACKET_SIZE];
+            snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", sender, destination, msg);
+            channel_broadcast(channel, packet, 0);
         }
     } else if (strcmp(command, "JOIN") == 0) {
         char *nickname = strtok(NULL, " ");
