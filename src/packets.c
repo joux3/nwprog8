@@ -224,7 +224,7 @@ int handle_registered_packet(client_t *client, char *packet) {
                 send_packet((conn_t*)client, "CMDREPLY You have joined too many channels");
                 return 0;
             }
-            if (client->nick->nick.channels[i] == NULL) {
+            if (client->nick->channels[i] == NULL) {
                 break;
             }
         }
@@ -241,7 +241,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
         printf("User '%s' joined channel '%s'\n", client->nick->nick.nickname, channel_name);
         cfuhash_put(channel->nicknames, client->nick->nick.nickname, client->nick);
-        client->nick->nick.channels[i] = channel;
+        client->nick->channels[i] = channel;
         // send the join message to users on the channel
         char packet[NETWORK_MAX_PACKET_SIZE];
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", client->nick->nick.nickname, channel->name);
@@ -260,12 +260,12 @@ int handle_registered_packet(client_t *client, char *packet) {
                 send_packet((conn_t*)client, "CMDREPLY You are not on that channel");
                 return 0;
             }
-            if (client->nick->nick.channels[i] && strcasecmp(client->nick->nick.channels[i]->name, channel_name) == 0) {
+            if (client->nick->channels[i] && strcasecmp(client->nick->channels[i]->name, channel_name) == 0) {
                 break;
             }
         }
-        channel_t *channel = client->nick->nick.channels[i];
-        client->nick->nick.channels[i] = NULL;
+        channel_t *channel = client->nick->channels[i];
+        client->nick->channels[i] = NULL;
         void *res = cfuhash_delete(channel->nicknames, client->nick->nick.nickname);
         assert(res != NULL);
         if (cfuhash_num_entries(channel->nicknames) == 0) {
@@ -289,11 +289,11 @@ int handle_registered_packet(client_t *client, char *packet) {
                 send_packet((conn_t*)client, "CMDREPLY You are not on that channel");
                 return 0;
             }
-            if (client->nick->nick.channels[i] && strcasecmp(client->nick->nick.channels[i]->name, channel_name) == 0) {
+            if (client->nick->channels[i] && strcasecmp(client->nick->channels[i]->name, channel_name) == 0) {
                 break;
             }
         }
-        channel_t *channel = client->nick->nick.channels[i];
+        channel_t *channel = client->nick->channels[i];
         send_channel_names(client, channel);
         return 0;
     }
@@ -305,8 +305,8 @@ void remove_from_channels(client_t *client, char *reason) {
     // local nicknames that already know about the disconnect
     cfuhash_table_t *already_sent = cfuhash_new();
     for (int i = 0; i < USER_MAX_CHANNELS; i++) {
-        if (client->nick->nick.channels[i] != NULL) {
-            channel_t *channel = client->nick->nick.channels[i];
+        if (client->nick->channels[i] != NULL) {
+            channel_t *channel = client->nick->channels[i];
             void *res = cfuhash_delete(channel->nicknames, client->nick->nick.nickname);
             assert(res != NULL);
             if (cfuhash_num_entries(channel->nicknames) == 0) {
@@ -362,6 +362,7 @@ void kill_nickname(char *nickname, char *reason) {
             // TODO remove from channels
             //remove_from_channels(client, reason);
             printf("Nickname '%s' killed\n", res->nickname);
+            // TODO free the memory
         } else {
             assert(0);
         }
@@ -404,7 +405,6 @@ int handle_server_packet(server_t *server, char *packet) {
             nick->nick.type = REMOTE;
             nick->server = server;
             strncpy(nick->nick.nickname, nickname, NICKNAME_LENGTH);
-            memset(&nick->nick.channels, 0, USER_MAX_CHANNELS * sizeof(channel_t*));
             cfuhash_put(nicknames_hash, nickname, nick);
         }
     } else if (strcmp(command, "KILL") == 0) {

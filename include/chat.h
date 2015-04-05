@@ -21,13 +21,13 @@ typedef enum {
 typedef struct {
 	char nickname[NICKNAME_LENGTH];
     nickname_type type;
-	channel_t *channels[USER_MAX_CHANNELS];
 } nickname_t;
 
 struct client_struct;
 typedef struct {
     nickname_t nick;
     struct client_struct *client;
+	channel_t *channels[USER_MAX_CHANNELS];
 } localnick_t;
 
 struct server_struct;
