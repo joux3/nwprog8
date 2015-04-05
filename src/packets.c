@@ -521,15 +521,22 @@ int handle_server_packet(server_t *server, char *packet) {
 void handle_server_connect(server_t *server) {
     // tell the server about all the nicknames we know of 
     char *nickname;
-    void *data;
-    int res = cfuhash_each(nicknames_hash, &nickname, &data);
+    nickname_t *nickname_struct;
+    int res = cfuhash_each(nicknames_hash, &nickname, (void**)&nickname_struct);
     char packet[NETWORK_MAX_PACKET_SIZE];
     while (res != 0) {
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "NICK %s", nickname);
         send_packet((conn_t*)server, packet);
-        res = cfuhash_next(nicknames_hash, &nickname, &data);
+        // send the channels for the nickname
+        for (int i = 0; i < USER_MAX_CHANNELS; i++) {
+            if (nickname_struct->channels[i] != NULL) {
+                channel_t *channel = nickname_struct->channels[i];
+                snprintf(packet, NETWORK_MAX_PACKET_SIZE, "JOIN %s %s", nickname, channel->name);
+                send_packet((conn_t*)server, packet);
+            }
+        }
+        res = cfuhash_next(nicknames_hash, &nickname, (void**)&nickname_struct);
     }
-    // TODO: tell the server about all the channels for each and every nick
     cfuhash_put_data(servers_hash, server, sizeof(server), server, sizeof(server), NULL);
 }
 
