@@ -337,6 +337,7 @@ void handle_disconnect(client_t *client) {
         assert(res != NULL);
         remove_from_channels(client, "client disconnected");
         printf("Registered user '%s' disconnected\n", client->nick->nick.nickname);
+        // TODO tell other servers about the disconnect
     } else {
         printf("Unregistered client disconnected\n");
     }
@@ -396,7 +397,12 @@ int handle_server_packet(server_t *server, char *packet) {
             server_broadcast(packet);
             kill_nickname(nickname, "nickname collision");
         } else {
-            // TODO
+            remotenick_t *nick = malloc(sizeof(remotenick_t));
+            nick->nick.type = REMOTE;
+            nick->server = server;
+            strncpy(nick->nick.nickname, nickname, NICKNAME_LENGTH);
+            memset(&nick->nick.channels, 0, USER_MAX_CHANNELS * sizeof(channel_t*));
+            cfuhash_put(nicknames_hash, nickname, nick);
         }
     } else if (strcmp(command, "KILL") == 0) {
         char *nickname = strtok(NULL, " ");
