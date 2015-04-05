@@ -9,9 +9,15 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <ctype.h>
+#include "cfuhash.h"
 
-#define MAX_LENGHT 64
+#define MAX_LENGTH 256
 #define SERVER_PORT "13337"
+
+#define NICKNAME_LENGTH 10
+#define CHANNEL_LENGTH 10
+#define CHANNEL_MIN_LENGTH 2 // don't allow just "#" as channel name
+#define USER_MAX_CHANNELS 10
 
 #define COLOR_RED     "\033[22;31m"
 #define COLOR_GREEN   "\033[22;32m"
@@ -21,19 +27,19 @@
 #define COLOR_CYAN    "\033[22;36m"
 #define COLOR_RESET   "\033[0m"
 
-int tcp_connect(const char *host) {
+int tcp_connect(const char *host, const char *serv_port) {
 	int sockfd, n;
 	char server_addr[80];
-	char *serv = SERVER_PORT;
+	//char *serv = serv_port;
 	struct addrinfo hints, *res, *ressave;
 
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ( (n = getaddrinfo(host, serv, &hints, &res)) != 0) {
+	if ( (n = getaddrinfo(host, serv_port, &hints, &res)) != 0) {
 		fprintf(stderr, "tcp_connect error for %s, %s: %s\n",
-			host, serv, gai_strerror(n));
+			host, serv_port, gai_strerror(n));
 		return -1;
 	}
 	ressave = res; // so that we can release the memory afterwards
@@ -58,11 +64,11 @@ int tcp_connect(const char *host) {
 	} while ( (res = res->ai_next) != NULL);
 
 	if (res == NULL) {      /* errno set from final connect() */
-		fprintf(stderr, "tcp_connect error for %s, %s\n", host, serv);
+		fprintf(stderr, "tcp_connect error for %s, %s\n", host, serv_port);
 		sockfd = -1;
 		return 1;
 	} else {
-		printf("###Connected to: "COLOR_CYAN"%s "COLOR_RESET"[%s]:%s\n", host, server_addr, serv);
+		printf("###Connected to: "COLOR_CYAN"%s "COLOR_RESET"[%s]:%s\n", host, server_addr, serv_port);
 	}
 
 	freeaddrinfo(ressave);
@@ -73,36 +79,59 @@ typedef struct sock_thdata
 {
 	int thread_no;
 	int socket;
+	char *nick;
 } thdata;
 
+typedef struct {
+	char message[MAX_LENGTH];
+	
+} message_t;
 
 typedef struct {
-	int id;
-	char name[16];
-	char messages[10][256];
+	//int id;
+	char name[CHANNEL_LENGTH];
+	cfuhash_table_t *messages;
 } channel_t;
 
-typedef struct {
-	int num_of_channels;
-	channel_t *channels[25];
-} channel_list_t;
+cfuhash_table_t *channel_list;
 
-void add_channel(channel_list_t *channel_list, channel_t *channel) {
-	channel_list->channels[channel_list->num_of_channels] = channel;
-	channel_list->num_of_channels++;
+channel_t *channel_create(char *channel_name) {
+    channel_t *channel = malloc(sizeof(channel_t));
+    if (channel == NULL)
+        return NULL;
+    //printf("Created channel %s\n", channel_name);
+    strncpy(channel->name, channel_name, CHANNEL_LENGTH);
+    channel->messages = cfuhash_new();
+    cfuhash_set_flag(channel->messages, CFUHASH_IGNORE_CASE); 
+    return channel;
 }
+
+channel_t *get_or_add_channel(char *channel_name) {
+	channel_t *channel = cfuhash_get(channel_list, channel_name); 
+    if (channel == NULL) {
+        channel = channel_create(channel_name);
+        if (channel == NULL)
+            return NULL;
+        cfuhash_put(channel_list, channel_name, channel);
+    }
+    return channel;
+}
+
 
 channel_t *current_channel;
 
 // Read user input and send to server
 void * send_message(void *ptr) {
-	char tx_buff[MAX_LENGHT], line[MAX_LENGHT - 1];
+	char tx_buff[MAX_LENGTH], line[MAX_LENGTH - 1];
 	thdata *data;
 	data = (thdata *) ptr;
+	channel_list = cfuhash_new_with_initial_size(USER_MAX_CHANNELS);
 	
-	channel_list_t channel_list;
-	channel_list.num_of_channels = 0;
-	//printf("give commands\n");
+	strcpy(tx_buff, "NICK ");
+	strcat(tx_buff, data->nick);
+	strcat(tx_buff, "\n");
+	write(data->socket, tx_buff, strlen(tx_buff));
+
 	for(;;) {
 		memset(line, '\0', sizeof(line));
 		memset(tx_buff, '\0', sizeof(tx_buff));
@@ -111,7 +140,7 @@ void * send_message(void *ptr) {
 		strcat(tx_buff, "\n");
 		if (strcmp(line, "") != 0) {
 			
-			char command_string[MAX_LENGHT];
+			char command_string[MAX_LENGTH];
 			memset(command_string, 0, sizeof(command_string));
 			strcpy(command_string, tx_buff);
 			char *command = strtok(command_string, " ");
@@ -119,11 +148,10 @@ void * send_message(void *ptr) {
 			if (strcmp(command, "/j") == 0) {
 				char channel_name[16];
 				strcpy(channel_name, strtok(NULL, "\n"));
+				
 				if (channel_name[0] == '#' && strlen(channel_name) < 16) {
-					channel_t channel;
-					strcpy(channel.name, channel_name);
-					add_channel(&channel_list, &channel);
-					current_channel = &channel;
+					get_or_add_channel(channel_name);
+					current_channel = get_or_add_channel(channel_name);
 					
 					strcpy(tx_buff, "JOIN ");
 					strcat(tx_buff, channel_name);
@@ -134,17 +162,19 @@ void * send_message(void *ptr) {
 					printf("Illegal channel name\n");
 					continue;
 				}
+			} if (strcmp(command, "/j") == 0) {
+			} 
+			if (strcmp(command, "/help") == 0) {
+				puts("help");
 			}
 			
-			//printf("chan %d\n", channel_list.num_of_channels);
-			if (channel_list.num_of_channels > 0) {
+			if (cfuhash_num_entries(channel_list) > 0) {
 				memset(tx_buff, '\0', sizeof(tx_buff));
 				strcpy(tx_buff, "MSG ");
 				strcat(tx_buff, current_channel->name);
 				strcat(tx_buff, " ");
 				strcat(tx_buff, line);
 				strcat(tx_buff, "\n");
-				//printf("%s\n", tx_buff);
 				write(data->socket, tx_buff, strlen(tx_buff));
 				continue;
 			}	
@@ -161,23 +191,24 @@ void * send_message(void *ptr) {
 
 // Listen to server and print to stdin
 void * read_socket(void *ptr) {
-	char rx_buff[MAX_LENGHT];
-	char line[MAX_LENGHT];
+	char rx_buff[MAX_LENGTH];
+	char line[MAX_LENGTH];
 	int read_n = 0;
 	thdata *data;
 	data = (thdata *) ptr;
+	
 	for(;;) {
-		//n = 0;
+		memset(rx_buff, 0, sizeof(rx_buff));
 		while (rx_buff[read_n - 1] != '\n') {
 			read_n += read(data->socket, rx_buff + read_n, sizeof(rx_buff));
-			
-			//sleep(2);
-			//printf("read_n %d rx_buf %s rx_buff@n-1 %d \n", read_n, rx_buff, rx_buff[read_n - 1]);
-			//printf("rx_buf %d", rx_buff[read_n - 1]);
 		}
-		if (read_n > 0) {
+		
+		while (read_n > 0) {
 			memset(line, '\0', sizeof(line));
-			char *command = strtok(rx_buff, " ");
+			char *rx_line = strtok(rx_buff, "\n");
+			char *rx_line_next = strtok(NULL, "\n");
+			char *command = strtok(rx_line, " ");
+			
 			if (strcmp(command, "MSG") == 0) {
 				char *sender = strtok(NULL, " ");
 				char *channel_name = strcpy(line, strtok(NULL, " "));
@@ -212,7 +243,9 @@ void * read_socket(void *ptr) {
 				strcpy(line, "Users on ");
 				strcat(line, strtok(NULL, " "));
 				strcat(line, ": ");
+				strcat(line, COLOR_CYAN);
 				strcat(line, strtok(NULL, "\n"));
+				strcat(line, COLOR_RESET);
 				
 			} else if (strcmp(command, "JOIN") == 0) {
 				strcpy(line, COLOR_CYAN);
@@ -224,10 +257,12 @@ void * read_socket(void *ptr) {
 			}
 			printf("%s\n", line);
 			
+			if(rx_line_next != NULL) {
+				strcpy(rx_line, rx_line_next);
+			} else {
+				read_n = 0;
+			}
 		}
-		read_n = 0;
-		memset(rx_buff, 0, sizeof(rx_buff));
-		//sleep(1);
 	}
 }	
 
@@ -240,20 +275,25 @@ int main(int argc, char **argv) {
 	thdata data_r, data_w;
 	
 	// Requires server address as a command line argument
-	if (argc != 2) {
-		fprintf(stderr, "usage: <server_address>\n");
-
+	if (argc != 4) {
+		fprintf(stderr, "usage: ./client <nick> <server_address> <server_port>\n");
 		return 1;
 	}
 	
-	sockfd = tcp_connect(argv[1]);
-	//printf("###Type '/help'for commands\n");
+	if (strlen(argv[1]) > NICKNAME_LENGTH) {
+		fprintf(stderr, "Nickname too long");
+		return 1;
+	}
+	
+	sockfd = tcp_connect(argv[2], argv[3]);
+	printf("###Type '/help'for commands\n");
 	
 	data_r.thread_no = 1;
 	data_r.socket = sockfd;
 	
 	data_w.thread_no = 2;
 	data_w.socket = sockfd;
+	data_w.nick = argv[1];
 	
 	// Start threads for sending and receiving messages
 	if ((pthread_create (&thread1, NULL,  &read_socket, (void *) &data_r)) != 0) 

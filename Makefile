@@ -13,7 +13,7 @@ SRCS=src/server.c src/network.c src/packets.c src/client.c src/libcfu/cfuhash.c
 TARGETS=src/server src/client
 
 src/server: src/server.o src/network.o src/packets.o src/libcfu/cfuhash.o
-src/client: src/client.o
+src/client: src/client.o src/libcfu/cfuhash.o
 
 TEST_SUITE=src/foo-test
 
