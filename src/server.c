@@ -47,7 +47,7 @@ int get_addr(char *host, uint16_t port, int *socket_domain, int *socket_protocol
 		if (sockfd < 0)
 			continue;       /* ignore this one */
 
-		if (res->ai_family != AF_INET && res->ai_family == AF_INET6) {
+		if (res->ai_family != AF_INET && res->ai_family != AF_INET6) {
             close(sockfd);
             continue;
         }
