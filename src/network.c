@@ -13,7 +13,7 @@
 
 int start_listening(uint16_t port);
 int make_nonblock(int);
-int start_epoll(int, int, char*);
+int start_epoll(int, int, char*, uint16_t);
 int accept_connection(int, int, connection_type);
 int read_for_conn(conn_t *conn);
 int create_connect_fd();
@@ -21,16 +21,16 @@ int create_connect_fd();
 int connected = 0;
 int connect_fd = -1;
 
-int network_start(char *connect_address) {
-    int client_listen_sock = start_listening(NETWORK_CLIENT_PORT);
-    int server_listen_sock = start_listening(NETWORK_SERVER_PORT);
+int network_start(uint16_t client_port, char *connect_address, uint16_t server_port) {
+    int client_listen_sock = start_listening(client_port);
+    int server_listen_sock = start_listening(server_port);
     if (client_listen_sock < 0 || server_listen_sock < 0) {
         printf("Failed to open server socket for client or server-server communication!\n");
         return -1;
     }
     
     printf("Network started\n");
-    if (start_epoll(client_listen_sock, server_listen_sock, connect_address) < 0) {
+    if (start_epoll(client_listen_sock, server_listen_sock, connect_address, server_port) < 0) {
         return -1;
     }
 
@@ -144,7 +144,7 @@ void conn_free(conn_t *conn) {
     }
 }
 
-int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_address) {
+int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_address, uint16_t server_port) {
     struct epoll_event ev, events[NETWORK_MAX_EVENTS];
     int nfds, epollfd;
     struct sockaddr_in connect_addr;
@@ -175,7 +175,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_ad
     if (connect_address) {
         memset(&connect_addr, 0, sizeof(connect_addr));
         connect_addr.sin_family = AF_INET;
-        connect_addr.sin_port = htons(NETWORK_SERVER_PORT);
+        connect_addr.sin_port = htons(server_port);
         if (inet_pton(AF_INET, connect_address, &connect_addr.sin_addr) <= 0) {
             fprintf(stderr, "inet_pton error for %s, illegal address?\n", connect_address);
             return -1;

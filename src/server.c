@@ -10,5 +10,5 @@ int main(int argc, char **argv) {
         printf("Using server %s as a connection point to chat network\n", argv[1]);
     }
     init_packets();
-    return network_start(argc < 2 ? NULL : argv[1]);
+    return network_start(NETWORK_DEFAULT_CLIENT_PORT, argc < 2 ? NULL : argv[1], NETWORK_DEFAULT_SERVER_PORT);
 }
