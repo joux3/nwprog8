@@ -28,6 +28,8 @@
 #define COLOR_CYAN    "\033[22;36m"
 #define COLOR_RESET   "\033[0m"
 
+#define MOVE_CURSOR_UP "\033[1A"
+
 int tcp_connect(const char *host, const char *serv_port) {
 	int sockfd, n;
 	char server_addr[80];
@@ -138,6 +140,7 @@ void * send_message(void *ptr) {
 		memset(line, '\0', sizeof(line));
 		memset(tx_buff, '\0', sizeof(tx_buff));
 		scanf(" %[0-9a-zA-ZöÖäÄåÅ!#%&?()/.,:; ]", line);
+        printf(MOVE_CURSOR_UP);
 		strcpy(tx_buff, line);
 		strcat(tx_buff, "\n");
 		if (strcmp(line, "") != 0) {
