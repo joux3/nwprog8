@@ -1,6 +1,7 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
+#include <sys/socket.h>
 #include <stdint.h>
 #include "chat.h"
 
@@ -36,7 +37,7 @@ typedef struct server_struct {
 } server_t;
 
 // inits the network socket and starts running the event loop
-int network_start(uint16_t client_port, char *connect_address, uint16_t server_port);
+int network_start(uint16_t client_port, int socket_domain, int socket_protocol, void *connect_address, size_t connect_address_size, uint16_t server_port);
 
 // sends data to the given connection
 // returns 1 if successful, < 0 if failure

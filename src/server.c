@@ -1,3 +1,8 @@
+#include <sys/types.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -16,6 +21,48 @@ int get_and_set_port(char *port_str, uint16_t *port) {
     }
     *port = (uint16_t)val;
     return 1;
+}
+
+// try to get the first possible address match
+// we can't do actual connects yet
+int get_addr(char *host, uint16_t port, int *socket_domain, int *socket_protocol, void **host_address, size_t *host_address_size) {
+	struct addrinfo hints, *res, *ressave;
+    char port_str[16];
+    sprintf(port_str, "%d", port);
+    int n;
+
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+
+	if ( (n = getaddrinfo(host, port_str, &hints, &res)) != 0) {
+		printf("Error for %s, %s: %s\n", host, port_str, gai_strerror(n));
+		return 0;
+	}
+	ressave = res; // so that we can release the memory afterwards
+    int result = 0;
+
+	do {
+		int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+		if (sockfd < 0)
+			continue;       /* ignore this one */
+
+		if (res->ai_family != AF_INET && res->ai_family == AF_INET6) {
+            close(sockfd);
+            continue;
+        }
+
+        result = 1;
+        *host_address = malloc(res->ai_addrlen);
+        memcpy(*host_address, res->ai_addr, res->ai_addrlen);
+        *host_address_size = res->ai_addrlen;
+        *socket_domain = res->ai_family;
+        *socket_protocol = res->ai_protocol;
+        break; // we found AF_INET or AF_INET6 
+	} while ( (res = res->ai_next) != NULL);
+
+	freeaddrinfo(ressave);
+    return result;
 }
 
 int main(int argc, char **argv) {
@@ -73,7 +120,15 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    void *server_addr = NULL;
+    size_t server_addr_size;
+    int socket_domain, socket_protocol;
+    if (connect_to && !get_addr(connect_to, server_port, &socket_domain, &socket_protocol, &server_addr, &server_addr_size)) {
+        printf("Failed to find host %s...\n", connect_to);
+        return 3;
+    }
+
     printf("Server starting...\n");
     init_packets();
-    return network_start(client_port, connect_to, NETWORK_DEFAULT_SERVER_PORT);
+    return network_start(client_port, socket_domain, socket_protocol, server_addr, server_addr_size, server_port);
 }

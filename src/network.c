@@ -13,7 +13,7 @@
 
 int start_listening(uint16_t port);
 int make_nonblock(int);
-int start_epoll(int, int, char*, uint16_t);
+int start_epoll(int, int, int, int, void*, size_t);
 int accept_connection(int, int, connection_type);
 int read_for_conn(conn_t *conn);
 int create_connect_fd();
@@ -21,7 +21,7 @@ int create_connect_fd();
 int connected = 0;
 int connect_fd = -1;
 
-int network_start(uint16_t client_port, char *connect_address, uint16_t server_port) {
+int network_start(uint16_t client_port, int socket_domain, int socket_protocol, void *connect_address, size_t connect_address_size, uint16_t server_port) {
     int client_listen_sock = start_listening(client_port);
     int server_listen_sock = start_listening(server_port);
     if (client_listen_sock < 0 || server_listen_sock < 0) {
@@ -30,7 +30,7 @@ int network_start(uint16_t client_port, char *connect_address, uint16_t server_p
     }
     
     printf("Network started\n");
-    if (start_epoll(client_listen_sock, server_listen_sock, connect_address, server_port) < 0) {
+    if (start_epoll(client_listen_sock, server_listen_sock, socket_domain, socket_protocol, connect_address, connect_address_size) < 0) {
         return -1;
     }
 
@@ -144,10 +144,9 @@ void conn_free(conn_t *conn) {
     }
 }
 
-int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_address, uint16_t server_port) {
+int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domain, int socket_protocol, void *connect_address, size_t connect_address_size) {
     struct epoll_event ev, events[NETWORK_MAX_EVENTS];
     int nfds, epollfd;
-    struct sockaddr_in connect_addr;
 
     memset(&ev, 0, sizeof(struct epoll_event));
 
@@ -172,21 +171,12 @@ int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_ad
     }
 
     int connect_epoll_registered = 0;
-    if (connect_address) {
-        memset(&connect_addr, 0, sizeof(connect_addr));
-        connect_addr.sin_family = AF_INET;
-        connect_addr.sin_port = htons(server_port);
-        if (inet_pton(AF_INET, connect_address, &connect_addr.sin_addr) <= 0) {
-            fprintf(stderr, "inet_pton error for %s, illegal address?\n", connect_address);
-            return -1;
-        }
-    }
     
     for (;;) {
         if (connect_address) {
             if (!connected) {
-                connect_fd = create_connect_fd();
-                int res = connect(connect_fd, (struct sockaddr *)&connect_addr, sizeof(connect_addr));
+                connect_fd = create_connect_fd(socket_domain, socket_protocol);
+                int res = connect(connect_fd, (struct sockaddr *)connect_address, connect_address_size);
                 printf("Server connecting to network...\n");
                 if (res < 0 && errno != EINPROGRESS) {
                     perror("connect");
@@ -400,9 +390,9 @@ int network_send(conn_t *conn, const void *data, const size_t size) {
     return 1;
 }
 
-int create_connect_fd() {
+int create_connect_fd(int socket_domain, int socket_protocol) {
     int connect_fd;
-    if ((connect_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    if ((connect_fd = socket(socket_domain, SOCK_STREAM, socket_protocol)) < 0) {
         perror("socket error");
         return -1;
     }     
