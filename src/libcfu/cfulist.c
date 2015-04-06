@@ -95,6 +95,7 @@ cfulist_num_entries(cfulist_t *list) {
 
 static CFU_INLINE void
 lock_list(cfulist_t *list) {
+    list = list;
 #ifdef HAVE_PTHREAD_H
 	pthread_mutex_lock(&list->mutex);
 #endif
@@ -102,6 +103,7 @@ lock_list(cfulist_t *list) {
 
 static CFU_INLINE void
 unlock_list(cfulist_t *list) {
+    list = list;
 #ifdef HAVE_PTHREAD_H
 	pthread_mutex_unlock(&list->mutex);
 #endif

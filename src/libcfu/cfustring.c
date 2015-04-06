@@ -49,11 +49,6 @@
 #include <string.h>
 #include <assert.h>
 
-#ifndef HAVE_VSNPRINTF
-int rpl_vsnprintf(char *, size_t, const char *, va_list);
-# define vsnprintf rpl_vsnprintf
-#endif
-
 struct cfustring {
 	libcfu_type type;
 	size_t max_size;
