@@ -112,7 +112,7 @@ void client_close(client_t *client) {
 }
 
 void client_free(client_t *client) {
-    handle_disconnect(client); 
+    handle_client_disconnect(client); 
     client_close(client);
 }
 
@@ -302,7 +302,7 @@ int read_for_conn(conn_t *conn) {
                 if (client->buf[i] == '\n') {
                     client->buf[i] = '\0';
                     // pass the packet to the next layer to handle
-                    if (handle_packet(client, &client->buf[packet_start]) == STOP_HANDLING) {
+                    if (handle_client_packet(client, &client->buf[packet_start]) == STOP_HANDLING) {
                         return 1;
                     }
                     packet_start = i + 1;

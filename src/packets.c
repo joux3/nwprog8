@@ -127,7 +127,7 @@ int is_registered(client_t *client) {
     return client->nick->nick.nickname[0] != '\0';
 }
 
-int handle_packet(client_t *client, char *packet) {
+int handle_client_packet(client_t *client, char *packet) {
     if (is_registered(client)) {
         return handle_registered_packet(client, packet);        
     } else {
@@ -335,7 +335,7 @@ void remove_from_channels(nickname_t *nick, char *reason) {
     cfuhash_destroy(already_sent);
 }
 
-void handle_disconnect(client_t *client) {
+void handle_client_disconnect(client_t *client) {
     if (is_registered(client)) {
         void *res = cfuhash_delete(nicknames_hash, client->nick->nick.nickname);
         assert(res != NULL);
