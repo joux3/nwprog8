@@ -11,10 +11,10 @@ void init_packets();
 // handle_packet MUST NOT assume that any data pointed by
 // packet will be valid after the function call
 // return value: returns STOP_HANDLING if the network layer should stop handling this client
-int handle_packet(client_t *client, char *packet);
+int handle_client_packet(client_t *client, char *packet);
 
 // called before client_t is freed from memory
-void handle_disconnect(client_t *client);
+void handle_client_disconnect(client_t *client);
 
 // handles a packet for the given server
 // handle_packet MUST NOT assume that any data pointed by

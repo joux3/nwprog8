@@ -1,6 +1,7 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
+#include <stdint.h>
 #include "chat.h"
 
 typedef enum {
@@ -9,8 +10,8 @@ typedef enum {
 
 #define NETWORK_MAX_EVENTS 10
 #define NETWORK_LISTEN_Q 10
-#define NETWORK_CLIENT_PORT 13337
-#define NETWORK_SERVER_PORT 13338
+#define NETWORK_DEFAULT_CLIENT_PORT 13337
+#define NETWORK_DEFAULT_SERVER_PORT 13338
 
 #define NETWORK_CLIENT_BUF 2048
 #define NETWORK_SERVER_BUF 65536
@@ -35,7 +36,7 @@ typedef struct server_struct {
 } server_t;
 
 // inits the network socket and starts running the event loop
-int network_start(char *server_address);
+int network_start(uint16_t client_port, char *connect_address, uint16_t server_port);
 
 // sends data to the given connection
 // returns 1 if successful, < 0 if failure
