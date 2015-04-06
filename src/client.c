@@ -171,8 +171,9 @@ void * send_message(void *ptr) {
 					printf("Illegal channel name\n");
 					continue;
 				}
+			
 			// Leave channel	
-			} if (strcmp(line, "/l") == 0) {
+			if (strcmp(line, "/l") == 0) {
 				strcpy(tx_buff, "LEAVE ");
 				strcat(tx_buff, current_channel->name);
 				strcat(tx_buff, "\n");
@@ -180,13 +181,22 @@ void * send_message(void *ptr) {
 				cfuhash_delete(channel_list, current_channel->name);
 				write(data->socket, tx_buff, strlen(tx_buff));
 				continue;
-			
 			} 
+			
+			// Users on channel	
+			} if (strcmp(line, "/names") == 0) {
+				strcpy(tx_buff, "NAMES ");
+				strcat(tx_buff, current_channel->name);
+				strcat(tx_buff, "\n");
+				write(data->socket, tx_buff, strlen(tx_buff));
+				continue;
+			}
 			if (strcmp(line, "/help") == 0) {
 				puts("help");
 				continue;
 			}
 			
+			// Send message to 
 			if (line[0] != '/' && cfuhash_num_entries(channel_list) > 0) {
 				memset(tx_buff, '\0', sizeof(tx_buff));
 				strcpy(tx_buff, "MSG ");
