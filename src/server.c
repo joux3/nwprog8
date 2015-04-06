@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <string.h>
 #include "network.h"
 #include "packets.h"
 #include "cfuconf.h"
@@ -41,6 +42,7 @@ int main(int argc, char **argv) {
     if (cfuconf_get_directive_one_arg(config, "connect_to", &connect_to) < 0) {
         printf("The server to connect can be defined using 'connect_to' config parameter\n");
     } else {
+        connect_to = strdup(connect_to);
         printf("The server to connect: %s\n", connect_to);
     }
 
