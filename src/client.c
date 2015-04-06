@@ -13,7 +13,7 @@
 #include "cfuhash.h"
 
 #define MAX_LENGTH 256
-#define SERVER_PORT "13337"
+#define DEFAULT_SERVER_PORT "13337"
 
 #define NICKNAME_LENGTH 10
 #define CHANNEL_LENGTH 10
@@ -140,7 +140,7 @@ void * send_message(void *ptr) {
 		memset(line, '\0', sizeof(line));
 		memset(tx_buff, '\0', sizeof(tx_buff));
 		scanf(" %[0-9a-zA-ZöÖäÄåÅ!#%&?()/.,:; ]", line);
-        printf(MOVE_CURSOR_UP);
+		printf(MOVE_CURSOR_UP);
 		strcpy(tx_buff, line);
 		strcat(tx_buff, "\n");
 		if (strcmp(line, "") != 0) {
@@ -149,12 +149,16 @@ void * send_message(void *ptr) {
 			memset(command_string, 0, sizeof(command_string));
 			strcpy(command_string, tx_buff);
 			char *command = strtok(command_string, " ");
-			
+			// Join channel
 			if (strcmp(command, "/j") == 0) {
-				char channel_name[16];
+				if (cfuhash_num_entries(channel_list) >= USER_MAX_CHANNELS) {
+					printf("Max channel count already reached\n");
+					continue;
+				}
+				char channel_name[CHANNEL_LENGTH];
 				strcpy(channel_name, strtok(NULL, "\n"));
 				
-				if (channel_name[0] == '#' && strlen(channel_name) < 16) {
+				if (channel_name[0] == '#' && strlen(channel_name) <= CHANNEL_LENGTH) {
 					get_or_add_channel(channel_name);
 					current_channel = get_or_add_channel(channel_name);
 					
@@ -167,13 +171,23 @@ void * send_message(void *ptr) {
 					printf("Illegal channel name\n");
 					continue;
 				}
-			} if (strcmp(command, "/j") == 0) {
+			// Leave channel	
+			} if (strcmp(line, "/l") == 0) {
+				strcpy(tx_buff, "LEAVE ");
+				strcat(tx_buff, current_channel->name);
+				strcat(tx_buff, "\n");
+				printf("You left the channel "COLOR_CYAN"%s"COLOR_RESET"\n", current_channel->name);
+				cfuhash_delete(channel_list, current_channel->name);
+				write(data->socket, tx_buff, strlen(tx_buff));
+				continue;
+			
 			} 
-			if (strcmp(command, "/help") == 0) {
+			if (strcmp(line, "/help") == 0) {
 				puts("help");
+				continue;
 			}
 			
-			if (cfuhash_num_entries(channel_list) > 0) {
+			if (line[0] != '/' && cfuhash_num_entries(channel_list) > 0) {
 				memset(tx_buff, '\0', sizeof(tx_buff));
 				strcpy(tx_buff, "MSG ");
 				strcat(tx_buff, current_channel->name);
@@ -184,9 +198,9 @@ void * send_message(void *ptr) {
 				continue;
 			}	
 			
-			//printf("%s",tx_buff);
+			printf("Unknown command\n");
 			
-			write(data->socket, tx_buff, strlen(tx_buff));
+			//write(data->socket, tx_buff, strlen(tx_buff));
 			
 		}	
 		
@@ -254,7 +268,9 @@ void * read_socket(void *ptr) {
 				strcat(line, strtok(NULL, "\n"));
 				
 			} else if (strcmp(command, "LEAVE") == 0) {
+				strcat(line, COLOR_CYAN);
 				strcat(line, strtok(NULL, " "));
+				strcat(line, COLOR_RESET);
 				strcat(line, " left the channel ");
 				strcat(line, strtok(NULL, "\n"));
 				
@@ -294,7 +310,7 @@ int main(int argc, char **argv) {
 	thdata data_r, data_w;
 	
 	// Requires server address as a command line argument
-	if (argc != 4) {
+	if (argc < 3) {
 		fprintf(stderr, "usage: ./client <nick> <server_address> <server_port>\n");
 		return 1;
 	}
@@ -302,6 +318,9 @@ int main(int argc, char **argv) {
 	if (strlen(argv[1]) > NICKNAME_LENGTH) {
 		fprintf(stderr, "Nickname too long");
 		return 1;
+	}
+	if (argc < 4) {
+		argv[3] = DEFAULT_SERVER_PORT;
 	}
 	
 	sockfd = tcp_connect(argv[2], argv[3]);
