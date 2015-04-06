@@ -234,7 +234,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, char *connect_ad
                     return -1;
                 }
             } else if (events[n].data.ptr == &server_listen_sock) {
-                printf("server conn\n");
+                printf("Server connected to ours!\n");
                 if (accept_connection(epollfd, server_listen_sock, SERVER) < 0) {
                     return -1;
                 }
