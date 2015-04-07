@@ -249,7 +249,7 @@ void * send_message(void *ptr) {
 void * read_socket(void *ptr) {
 	char rx_buff[MAX_LENGTH];
 	char line[MAX_LENGTH];
-	char tmp[MAX_LENGTH];
+	char timestamp[MAX_LENGTH];
 	int read_n = 0;
 	thdata *data;
 	data = (thdata *) ptr;
@@ -265,27 +265,27 @@ void * read_socket(void *ptr) {
 		}
 		
 		while (read_n > 0) {
-			memset(line, '\0', sizeof(line));
+			memset(line, 0, sizeof(line));
+			//memset(tmp)
 			char *rx_line = strtok(rx_buff, "\n");
 			char *rx_line_next = strtok(NULL, "\n");
 			char *command = strtok(rx_line, " ");
 			
 			msg_time = time(NULL);
 			tm_p = localtime(&msg_time);
-			sprintf(tmp, "[%.2d:%.2d] ", tm_p->tm_hour, tm_p->tm_min);
-			strcpy(line, tmp);
+			sprintf(timestamp, "[%.2d:%.2d] ", tm_p->tm_hour, tm_p->tm_min);
+			strcpy(line, timestamp);
 		
 			if (strcmp(command, "MSG") == 0) {
 				
 				char *sender = strtok(NULL, " ");
-				char *channel_name = strcpy(line, strtok(NULL, " "));
-				if (strcmp(current_channel->name, channel_name) == 0) {
-					strcpy(line, tmp);
+				const char *channel_name_of_msg = strtok(NULL, " ");
+				if (cfuhash_exists(channel_list, current_channel->name) == 1) {
 					strcat(line, sender);
+					strcat(line, "/");
+					strcat(line, channel_name_of_msg);
 					strcat(line, "> ");
 					strcat(line, strtok(NULL, "\n"));
-					
-					
 				}	
 							
 			} else if (strcmp(command, "MOTD") == 0) {
@@ -339,7 +339,6 @@ void * read_socket(void *ptr) {
 }	
 
 
-	
 int main(int argc, char **argv) {
 	
 	int sockfd;
@@ -362,8 +361,6 @@ int main(int argc, char **argv) {
 	
 	sockfd = tcp_connect(argv[2], argv[3]);
 	printf("###Type '/help'for commands\n");
-	
-	
 	
 	data_r.thread_no = 1;
 	data_r.socket = sockfd;
