@@ -100,29 +100,40 @@ typedef struct {
 cfuhash_table_t *channel_list;
 
 channel_t *channel_create(char *channel_name) {
-    channel_t *channel = malloc(sizeof(channel_t));
-    if (channel == NULL)
-        return NULL;
-    //printf("Created channel %s\n", channel_name);
-    strncpy(channel->name, channel_name, CHANNEL_LENGTH);
-    channel->messages = cfuhash_new();
-    cfuhash_set_flag(channel->messages, CFUHASH_IGNORE_CASE); 
-    return channel;
+	channel_t *channel = malloc(sizeof(channel_t));
+	if (channel == NULL)
+	  return NULL;
+	//printf("Created channel %s\n", channel_name);
+	strncpy(channel->name, channel_name, CHANNEL_LENGTH);
+	channel->messages = cfuhash_new();
+	cfuhash_set_flag(channel->messages, CFUHASH_IGNORE_CASE); 
+	return channel;
 }
 
 channel_t *get_or_add_channel(char *channel_name) {
 	channel_t *channel = cfuhash_get(channel_list, channel_name); 
-    if (channel == NULL) {
-        channel = channel_create(channel_name);
-        if (channel == NULL)
-            return NULL;
-        cfuhash_put(channel_list, channel_name, channel);
-    }
-    return channel;
+	if (channel == NULL) {
+		channel = channel_create(channel_name);
+		//if (channel == NULL)
+		cfuhash_put(channel_list, channel_name, channel);
+		return NULL;
+	}
+	return channel;
 }
+
+/*char *my_channels () {
+	if (cfuhash_num_entries(channel_list) == 0) {
+		return NULL;
+	}
+	char channels = char[USER_MAX_CHANNEL * CHANNEL_LENGTH + 9];
+	char *channel_;
+	int res = cfuhash_each(channel_list, &channel_, (void**)&nickname_struct);
+	cfuhash_next
+}*/	
 
 
 channel_t *current_channel;
+channel_t *previous_channel;
 
 // Read user input and send to server
 void * send_message(void *ptr) {
@@ -159,7 +170,12 @@ void * send_message(void *ptr) {
 				strcpy(channel_name, strtok(NULL, "\n"));
 				
 				if (channel_name[0] == '#' && strlen(channel_name) <= CHANNEL_LENGTH) {
-					get_or_add_channel(channel_name);
+					if (get_or_add_channel(channel_name) != NULL) {
+						current_channel = get_or_add_channel(channel_name);
+						printf("Active channel changed to %s\n", current_channel->name);
+						continue;
+					}
+					previous_channel = current_channel;
 					current_channel = get_or_add_channel(channel_name);
 					
 					strcpy(tx_buff, "JOIN ");
@@ -171,12 +187,15 @@ void * send_message(void *ptr) {
 					printf("Illegal channel name\n");
 					continue;
 				}
+			}
+			// TODO: Private message
 			
 			// Leave channel	
 			if (strcmp(line, "/l") == 0) {
 				strcpy(tx_buff, "LEAVE ");
 				strcat(tx_buff, current_channel->name);
 				strcat(tx_buff, "\n");
+				current_channel = previous_channel;
 				printf("You left the channel "COLOR_CYAN"%s"COLOR_RESET"\n", current_channel->name);
 				cfuhash_delete(channel_list, current_channel->name);
 				write(data->socket, tx_buff, strlen(tx_buff));
@@ -184,16 +203,24 @@ void * send_message(void *ptr) {
 			} 
 			
 			// Users on channel	
-			} if (strcmp(line, "/names") == 0) {
+			if (strcmp(line, "/names") == 0) {
 				strcpy(tx_buff, "NAMES ");
 				strcat(tx_buff, current_channel->name);
 				strcat(tx_buff, "\n");
 				write(data->socket, tx_buff, strlen(tx_buff));
 				continue;
 			}
+			// Help
 			if (strcmp(line, "/help") == 0) {
-				puts("help");
+				puts("/j #<channel_name>  Join channel or change active channel");
+				puts("/l                  Leave channel");
+				puts("/names              Show users on channel");
 				continue;
+			}
+			// Quit
+			if (strcmp(line, "/quit") == 0) {
+				cfuhash_destroy(channel_list);
+				exit(0);
 			}
 			
 			// Send message to 
