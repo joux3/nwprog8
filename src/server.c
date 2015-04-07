@@ -10,6 +10,7 @@
 #include "network.h"
 #include "packets.h"
 #include "cfuconf.h"
+#include "logging.h"
 
 int get_and_set_port(char *port_str, uint16_t *port) {
     char *endptr;
