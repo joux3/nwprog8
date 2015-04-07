@@ -11,14 +11,8 @@
 #include <ctype.h>
 #include <time.h>
 #include "cfuhash.h"
+#include "client.h"
 
-#define MAX_LENGTH 256
-#define DEFAULT_SERVER_PORT "13337"
-
-#define NICKNAME_LENGTH 10
-#define CHANNEL_LENGTH 10
-#define CHANNEL_MIN_LENGTH 2 // don't allow just "#" as channel name
-#define USER_MAX_CHANNELS 10
 
 #define COLOR_RED     "\033[22;31m"
 #define COLOR_GREEN   "\033[22;32m"
@@ -85,17 +79,7 @@ typedef struct sock_thdata
 	char *nick;
 } thdata;
 
-typedef struct {
-	char message[MAX_LENGTH];
-	struct tm *tm_p;
-	
-} message_t;
 
-typedef struct {
-	//int id;
-	char name[CHANNEL_LENGTH];
-	cfuhash_table_t *messages;
-} channel_t;
 
 cfuhash_table_t *channel_list;
 
@@ -121,23 +105,30 @@ channel_t *get_or_add_channel(char *channel_name) {
 	return channel;
 }
 
-/*char *my_channels () {
+int my_channels(char *channel_string) {
 	if (cfuhash_num_entries(channel_list) == 0) {
-		return NULL;
+		return 1;
 	}
-	char channels = char[USER_MAX_CHANNEL * CHANNEL_LENGTH + 9];
-	char *channel_;
-	int res = cfuhash_each(channel_list, &channel_, (void**)&nickname_struct);
-	cfuhash_next
-}*/	
+	char *key;
+	channel_t *channel;
+	cfuhash_each(channel_list, &key, (void**)&channel);
+	do {
+		if(channel->name != NULL) {
+			strcat(channel_string, channel->name);
+			strcat(channel_string, " ");
+		}
+	} while (cfuhash_next(channel_list, &key, (void**)&channel));
+	return 0;
+}
 
 
 channel_t *current_channel;
-channel_t *previous_channel;
 
 // Read user input and send to server
 void * send_message(void *ptr) {
 	char tx_buff[MAX_LENGTH], line[MAX_LENGTH - 1];
+	char chan_str[USER_MAX_CHANNELS * CHANNEL_LENGTH + 9];
+	channel_t *chan_tmp;
 	thdata *data;
 	data = (thdata *) ptr;
 	channel_list = cfuhash_new_with_initial_size(USER_MAX_CHANNELS);
@@ -160,27 +151,34 @@ void * send_message(void *ptr) {
 			memset(command_string, 0, sizeof(command_string));
 			strcpy(command_string, tx_buff);
 			char *command = strtok(command_string, " ");
+			
 			// Join channel
 			if (strcmp(command, "/j") == 0) {
 				if (cfuhash_num_entries(channel_list) >= USER_MAX_CHANNELS) {
 					printf("Max channel count already reached\n");
 					continue;
 				}
+				
 				char channel_name[CHANNEL_LENGTH];
 				strcpy(channel_name, strtok(NULL, "\n"));
 				
+				if (cfuhash_num_entries(channel_list) == 0) {
+					strcpy(chan_tmp->name, channel_name);
+				}
 				if (channel_name[0] == '#' && strlen(channel_name) <= CHANNEL_LENGTH) {
 					if (get_or_add_channel(channel_name) != NULL) {
 						current_channel = get_or_add_channel(channel_name);
 						printf("Active channel changed to %s\n", current_channel->name);
 						continue;
 					}
-					previous_channel = current_channel;
 					current_channel = get_or_add_channel(channel_name);
 					
 					strcpy(tx_buff, "JOIN ");
 					strcat(tx_buff, channel_name);
 					strcat(tx_buff, "\n");
+					
+					
+					
 					write(data->socket, tx_buff, strlen(tx_buff));
 					continue;
 				} else {
@@ -190,24 +188,44 @@ void * send_message(void *ptr) {
 			}
 			// TODO: Private message
 			
-			// Leave channel	
+			// Leave channel	; TODO: fails
 			if (strcmp(line, "/l") == 0) {
 				strcpy(tx_buff, "LEAVE ");
 				strcat(tx_buff, current_channel->name);
 				strcat(tx_buff, "\n");
-				current_channel = previous_channel;
 				printf("You left the channel "COLOR_CYAN"%s"COLOR_RESET"\n", current_channel->name);
+				channel_t *channel_;
+				char *key;
+				cfuhash_each(channel_list, &key, (void**)&channel_);
+				
+				cfuhash_next(channel_list, &key, (void**)&channel_);
 				cfuhash_delete(channel_list, current_channel->name);
+				current_channel = channel_;
+				puts(current_channel->name);
+				
+				free(current_channel);
 				write(data->socket, tx_buff, strlen(tx_buff));
 				continue;
 			} 
 			
 			// Users on channel	
 			if (strcmp(line, "/names") == 0) {
+				if (cfuhash_num_entries(channel_list) == 0) {
+					printf("You are not on ańy channel\n");
+					continue;
+				}
 				strcpy(tx_buff, "NAMES ");
 				strcat(tx_buff, current_channel->name);
 				strcat(tx_buff, "\n");
 				write(data->socket, tx_buff, strlen(tx_buff));
+				continue;
+			}
+			// Show my channels
+			if (strcmp(line, "/ch") == 0) {
+				memset(chan_str, 0, sizeof(chan_str));
+				strcat(chan_str, "Channels: ");
+				my_channels(chan_str);
+				printf("%s\n", chan_str);
 				continue;
 			}
 			// Help
@@ -267,6 +285,8 @@ void * read_socket(void *ptr) {
 		while (read_n > 0) {
 			memset(line, 0, sizeof(line));
 			//memset(tmp)
+			//char *rx_line;
+			//strcpy(rx_line, rx_buff);
 			char *rx_line = strtok(rx_buff, "\n");
 			char *rx_line_next = strtok(NULL, "\n");
 			char *command = strtok(rx_line, " ");
@@ -324,6 +344,12 @@ void * read_socket(void *ptr) {
 				strcat(line, strtok(NULL, " "));
 				strcat(line, COLOR_RESET);
 				strcat(line, " joined the channel");
+			} else if (strcmp(command, "CMDREPLY") == 0) {
+				strcat(line, COLOR_RED);
+				strcat(line, "Error: ");
+				strcat(line, COLOR_RESET);
+				strcat(line, strtok(NULL, "\n"));
+				
 			} else {
 				strcpy(line, rx_buff);
 			}
