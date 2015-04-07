@@ -40,7 +40,7 @@ channel_t *channel_create(char *channel_name) {
     channel_t *channel = malloc(sizeof(channel_t));
     if (channel == NULL)
         return NULL;
-    printf("Created channel %s\n", channel_name);
+    log_debug("Created channel %s\n", channel_name);
     strncpy(channel->name, channel_name, CHANNEL_LENGTH);
     channel->nicknames = cfuhash_new();
     cfuhash_set_flag(channel->nicknames, CFUHASH_IGNORE_CASE); 
@@ -59,7 +59,7 @@ channel_t *get_or_create_channel(char *channel_name) {
 }
 
 void channel_destroy(channel_t *channel) {
-    printf("Destroying channel %s\n", channel->name);
+    log_debug("Destroying channel %s\n", channel->name);
     void *res = cfuhash_delete(channels_hash, channel->name);
     assert(res != NULL);
     assert(cfuhash_num_entries(channel->nicknames) == 0);
@@ -140,7 +140,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
     if (command != NULL && strcmp(command, "NICK") == 0) {
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
-            printf("Unregistered user illegal nick, dropping\n");
+            log_debug("Unregistered user illegal nick, dropping\n");
             send_packet((conn_t*)client, "CLOSE Illegal nickname");
             client_free(client);
         } else {
@@ -148,7 +148,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
             if (nicklen > 0 && nicklen < NICKNAME_LENGTH && nickname[0] != '#') {
                 if (!cfuhash_exists(nicknames_hash, nickname)) {
                     strncpy(client->nick->nick.nickname, nickname, NICKNAME_LENGTH);
-                    printf("Registered nickname: %s\n", nickname);
+                    log_debug("Registered nickname: %s\n", nickname);
 	                char packet[NETWORK_MAX_PACKET_SIZE];
                     snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MOTD Welcome to da server, %s!", nickname);
                     send_packet((conn_t*)client, packet);
@@ -158,18 +158,18 @@ int handle_unregistered_packet(client_t *client, char *packet) {
                     server_broadcast(packet);
                     return 0;
                 } else {
-                    printf("Unregistered user nickname taken '%s', dropping\n", nickname);
+                    log_debug("Unregistered user nickname taken '%s', dropping\n", nickname);
                     send_packet((conn_t*)client, "CLOSE Nickname taken!");
                     client_free(client);
                 }
             } else {
-                printf("Unregistered user illegal nick '%s', dropping\n", nickname);
+                log_debug("Unregistered user illegal nick '%s', dropping\n", nickname);
                 send_packet((conn_t*)client, "CLOSE Illegal nickname");
                 client_free(client);
             }
         }
     } else {
-        printf("Unregistered user didn't send NICK as first packet, dropping\n");
+        log_debug("Unregistered user didn't send NICK as first packet, dropping\n");
         send_packet((conn_t*)client, "CLOSE Please send nickname with NICK");
         client_free(client);
     }
@@ -179,7 +179,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
 int handle_registered_packet(client_t *client, char *packet) {
     char *command = strtok(packet, " ");
     if (command == NULL) {
-        printf("Illegal packet from %s: %s\n", client->nick->nick.nickname, packet);
+        log_debug("Illegal packet from %s: %s\n", client->nick->nick.nickname, packet);
         return 0;
     }
     if (strcmp(command, "MSG") == 0) {
@@ -195,7 +195,7 @@ int handle_registered_packet(client_t *client, char *packet) {
             return 0;
         }
 
-        printf("Message from '%s' to '%s': %s\n", client->nick->nick.nickname, destination, msg);
+        log_debug("Message from '%s' to '%s': %s\n", client->nick->nick.nickname, destination, msg);
         char packet[NETWORK_MAX_PACKET_SIZE];
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", client->nick->nick.nickname, destination, msg);
         if (cfuhash_exists(nicknames_hash, destination)) {
@@ -232,14 +232,14 @@ int handle_registered_packet(client_t *client, char *packet) {
         channel_t *channel = get_or_create_channel(channel_name);
         if (channel == NULL) {
             send_packet((conn_t*)client, "CMDREPLY Joining channel failed, server memory full");
-            printf("User '%s' failed to join channel '%s', get_or_create_channel NULL\n", client->nick->nick.nickname, channel_name);
+            log_debug("User '%s' failed to join channel '%s', get_or_create_channel NULL\n", client->nick->nick.nickname, channel_name);
             return 0;
         }
         if (cfuhash_exists(channel->nicknames, client->nick->nick.nickname)) {
             send_packet((conn_t*)client, "CMDREPLY You have already joined!");
             return 0;
         }
-        printf("User '%s' joined channel '%s'\n", client->nick->nick.nickname, channel_name);
+        log_debug("User '%s' joined channel '%s'\n", client->nick->nick.nickname, channel_name);
         cfuhash_put(channel->nicknames, client->nick->nick.nickname, client->nick);
         client->nick->nick.channels[i] = channel;
         // send the join message to users on the channel
@@ -276,7 +276,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         } else {
             channel_broadcast(channel, packet, 1);
         }
-        printf("User '%s' left channel '%s'\n", client->nick->nick.nickname, channel_name);
+        log_debug("User '%s' left channel '%s'\n", client->nick->nick.nickname, channel_name);
         return 0;
     } else if (strcmp(command, "NAMES") == 0) {
         char *channel_name = strtok(NULL, " ");
@@ -298,7 +298,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         send_channel_names(client, channel);
         return 0;
     }
-    printf("Unhandled packet from %s: %s\n", client->nick->nick.nickname, packet);
+    log_debug("Unhandled packet from %s: %s\n", client->nick->nick.nickname, packet);
     return 0;
 }
 
@@ -340,12 +340,12 @@ void handle_client_disconnect(client_t *client) {
         void *res = cfuhash_delete(nicknames_hash, client->nick->nick.nickname);
         assert(res != NULL);
         remove_from_channels((nickname_t*)client->nick, "client disconnected");
-        printf("Registered user '%s' disconnected\n", client->nick->nick.nickname);
+        log_debug("Registered user '%s' disconnected\n", client->nick->nick.nickname);
         char packet[NETWORK_MAX_PACKET_SIZE];
         snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s client disconnected", client->nick->nick.nickname);
         server_broadcast(packet);
     } else {
-        printf("Unregistered client disconnected\n");
+        log_debug("Unregistered client disconnected\n");
     }
 }
 
@@ -355,7 +355,7 @@ void kill_nickname(char *nickname, char *reason) {
         if (res->type == LOCAL) {
             client_t *client = ((localnick_t*)res)->client;
             remove_from_channels(res, reason);
-            printf("Nickname '%s' killed\n", client->nick->nick.nickname);
+            log_debug("Nickname '%s' killed\n", client->nick->nick.nickname);
             char packet[NETWORK_MAX_PACKET_SIZE];
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s %s", client->nick->nick.nickname, reason);
             send_packet((conn_t*)client, packet);
@@ -363,7 +363,7 @@ void kill_nickname(char *nickname, char *reason) {
             client_close(client);
         } else if (res->type == REMOTE) {
             remove_from_channels(res, reason);
-            printf("Nickname '%s' killed\n", res->nickname);
+            log_debug("Nickname '%s' killed\n", res->nickname);
             free(res);
         } else {
             assert(0);
@@ -372,7 +372,7 @@ void kill_nickname(char *nickname, char *reason) {
 }
 
 int handle_server_packet(server_t *server, char *packet) {
-    printf("Packet from another server [%d]: %s\n", server->conn.fd, packet);
+    log_debug("Packet from another server [%d]: %s\n", server->conn.fd, packet);
     // broadcast the packet across rest of the network
     void *cur_key, *cur_data;
     size_t key_len, data_len;
@@ -395,9 +395,9 @@ int handle_server_packet(server_t *server, char *packet) {
         if (nickname == NULL) {
             return 0;
         }
-        printf("Nickname %s joined the network on another server\n", nickname);
+        log_debug("Nickname %s joined the network on another server\n", nickname);
         if (cfuhash_exists(nicknames_hash, nickname)) {
-            printf("Nickname collision for '%s'!\n", nickname); 
+            log_debug("Nickname collision for '%s'!\n", nickname); 
 	        char packet[NETWORK_MAX_PACKET_SIZE];
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s nickname collision", nickname);
             server_broadcast(packet);
@@ -473,7 +473,7 @@ int handle_server_packet(server_t *server, char *packet) {
             }
             assert(placed);
         } else {
-            printf("Received a JOIN packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
+            log_warn("Received a JOIN packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
             return 0;
         }
     } else if (strcmp(command, "LEAVE") == 0) {
@@ -499,7 +499,7 @@ int handle_server_packet(server_t *server, char *packet) {
                     }
                 }
                 if (!removed) {
-                    printf("POSSIBLE CRITICAL FAILURE, channel_t thinks user is on channel but nickname_t doesn't!\n");
+                    log_warn("POSSIBLE CRITICAL FAILURE, channel_t thinks user is on channel but nickname_t doesn't!\n");
                 }
                 cfuhash_delete(channel->nicknames, nick->nickname); 
                 if (cfuhash_num_entries(channel->nicknames) == 0) {
@@ -511,7 +511,7 @@ int handle_server_packet(server_t *server, char *packet) {
                 }
             }
         } else {
-            printf("Received a LEAVE packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
+            log_warn("Received a LEAVE packet from another server for unknown nickname or for nickname that isn't originally from that server!\n");
             return 0;
         }
     }
@@ -562,7 +562,7 @@ void free_nickname(void *data) {
 }
 
 void handle_server_disconnect(server_t *server) {
-    printf("Server %d disconnected\n", server->conn.fd);
+    log_debug("Server %d disconnected\n", server->conn.fd);
     void *data = cfuhash_delete_data(servers_hash, server, sizeof(server));
     assert(data != NULL);
     // kill all the nicknames associated with this server
