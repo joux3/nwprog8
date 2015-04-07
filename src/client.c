@@ -128,7 +128,7 @@ channel_t *current_channel;
 void * send_message(void *ptr) {
 	char tx_buff[MAX_LENGTH], line[MAX_LENGTH - 1];
 	char chan_str[USER_MAX_CHANNELS * CHANNEL_LENGTH + 9];
-	channel_t *chan_tmp;
+	char chan_tmp[CHANNEL_LENGTH];
 	thdata *data;
 	data = (thdata *) ptr;
 	channel_list = cfuhash_new_with_initial_size(USER_MAX_CHANNELS);
@@ -163,7 +163,7 @@ void * send_message(void *ptr) {
 				strcpy(channel_name, strtok(NULL, "\n"));
 				
 				if (cfuhash_num_entries(channel_list) == 0) {
-					strcpy(chan_tmp->name, channel_name);
+					strcpy(chan_tmp, channel_name);
 				}
 				if (channel_name[0] == '#' && strlen(channel_name) <= CHANNEL_LENGTH) {
 					if (get_or_add_channel(channel_name) != NULL) {
