@@ -129,6 +129,8 @@ int main(int argc, char **argv) {
         return 3;
     }
 
+    init_logger(DEBUG, NULL);
+
     printf("Server starting...\n");
     init_packets();
     return network_start(client_port, socket_domain, socket_protocol, server_addr, server_addr_size, server_port);

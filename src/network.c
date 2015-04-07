@@ -10,6 +10,7 @@
 #include <errno.h>
 #include "network.h"
 #include "packets.h"
+#include "logging.h"
 
 int start_listening(uint16_t port);
 int make_nonblock(int);
@@ -25,11 +26,11 @@ int network_start(uint16_t client_port, int socket_domain, int socket_protocol, 
     int client_listen_sock = start_listening(client_port);
     int server_listen_sock = start_listening(server_port);
     if (client_listen_sock < 0 || server_listen_sock < 0) {
-        printf("Failed to open server socket for client or server-server communication!\n");
+        log_error("Failed to open server socket for client or server-server communication!\n");
         return -1;
     }
     
-    printf("Network started\n");
+    log_debug("Network started\n");
     if (start_epoll(client_listen_sock, server_listen_sock, socket_domain, socket_protocol, connect_address, connect_address_size) < 0) {
         return -1;
     }
@@ -177,7 +178,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
             if (!connected) {
                 connect_fd = create_connect_fd(socket_domain, socket_protocol);
                 int res = connect(connect_fd, (struct sockaddr *)connect_address, connect_address_size);
-                printf("Server connecting to network...\n");
+                log_debug("Server connecting to network...\n");
                 if (res < 0 && errno != EINPROGRESS) {
                     perror("connect");
                     return -1;
@@ -192,11 +193,11 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                     perror("getsockopt"); 
                     return -1;
                 } else if (error != 0) { 
-                    printf("connection error %d\n", error);
+                    log_debug("connection error %d\n", error);
                     connected = 0;
                     close(connect_fd);
                 } else if (!connect_epoll_registered) {
-                    printf("Connected to network!\n");
+                    log_debug("Connected to network!\n");
                     connect_epoll_registered = 1; 
                     memset(&ev, 0, sizeof(struct epoll_event));
                     ev.events = EPOLLIN;
@@ -224,7 +225,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                     return -1;
                 }
             } else if (events[n].data.ptr == &server_listen_sock) {
-                printf("Server connected to ours!\n");
+                log_debug("Server connected to ours!\n");
                 if (accept_connection(epollfd, server_listen_sock, SERVER) < 0) {
                     return -1;
                 }
@@ -285,7 +286,7 @@ int read_for_conn(conn_t *conn) {
             int packet_size = 1;
             for (int i = 0; i < client->buf_used; i++) {
                 if (packet_size > NETWORK_MAX_PACKET_SIZE) {
-                    printf("Client tried to send a packet too long!\n");
+                    log_debug("Client tried to send a packet too long!\n");
                     client_free(client);
                     return 1;
                 }
@@ -325,7 +326,7 @@ int read_for_conn(conn_t *conn) {
             int packet_size = 1;
             for (int i = 0; i < server->buf_used; i++) {
                 if (packet_size > NETWORK_MAX_PACKET_SIZE) {
-                    printf("Server tried to send a packet too long!\n");
+                    log_debug("Server tried to send a packet too long!\n");
                     server_free(server);
                     return 1;
                 }
@@ -356,7 +357,7 @@ int read_for_conn(conn_t *conn) {
         }
         return 1; 
     } else {
-        printf("Unknown conn type!\n");
+        log_error("Unknown conn type!\n");
         return -1;
     }
 }

@@ -36,8 +36,18 @@ void log_debug(char *format_string, ...) {
 
 void log_warn(char *format_string, ...) {
     assert(initialized);
+    if (logging_level == DEBUG || logging_level == WARN) {
+        va_list args;
+        va_start(args, format_string);
+        do_log("[WARN]", format_string, args);
+        va_end(args); 
+    }
+}
+
+void log_error(char *format_string, ...) {
+    assert(initialized);
     va_list args;
     va_start(args, format_string);
-    do_log("[WARN]", format_string, args);
+    do_log("[ERROR]", format_string, args);
     va_end(args); 
 }
