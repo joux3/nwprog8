@@ -4,7 +4,7 @@
 #include <stdarg.h>
 
 typedef enum {
-	DEBUG, INFO, WARN, ERROR
+    DEBUG, INFO, WARN, ERROR
 } log_level;
 
 int init_logger(log_level level, char *log_filename);

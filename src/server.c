@@ -42,28 +42,28 @@ int parse_log_level(char *log_level_str, log_level *log_level) {
 // try to get the first possible address match
 // we can't do actual connects yet
 int get_addr(char *host, uint16_t port, int *socket_domain, int *socket_protocol, void **host_address, size_t *host_address_size) {
-	struct addrinfo hints, *res, *ressave;
+    struct addrinfo hints, *res, *ressave;
     char port_str[16];
     sprintf(port_str, "%d", port);
     int n;
 
-	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
 
-	if ( (n = getaddrinfo(host, port_str, &hints, &res)) != 0) {
-		printf("Error for %s, %s: %s\n", host, port_str, gai_strerror(n));
-		return 0;
-	}
-	ressave = res; // so that we can release the memory afterwards
+    if ( (n = getaddrinfo(host, port_str, &hints, &res)) != 0) {
+        printf("Error for %s, %s: %s\n", host, port_str, gai_strerror(n));
+        return 0;
+    }
+    ressave = res; // so that we can release the memory afterwards
     int result = 0;
 
-	do {
-		int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-		if (sockfd < 0)
-			continue;       /* ignore this one */
+    do {
+        int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+        if (sockfd < 0)
+            continue;       /* ignore this one */
 
-		if (res->ai_family != AF_INET && res->ai_family != AF_INET6) {
+        if (res->ai_family != AF_INET && res->ai_family != AF_INET6) {
             close(sockfd);
             continue;
         }
@@ -75,9 +75,9 @@ int get_addr(char *host, uint16_t port, int *socket_domain, int *socket_protocol
         *socket_domain = res->ai_family;
         *socket_protocol = res->ai_protocol;
         break; // we found AF_INET or AF_INET6 
-	} while ( (res = res->ai_next) != NULL);
+    } while ( (res = res->ai_next) != NULL);
 
-	freeaddrinfo(ressave);
+    freeaddrinfo(ressave);
     return result;
 }
 

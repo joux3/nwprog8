@@ -150,7 +150,7 @@ int handle_unregistered_packet(client_t *client, char *packet) {
                 if (!cfuhash_exists(nicknames_hash, nickname)) {
                     strncpy(client->nick->nick.nickname, nickname, NICKNAME_LENGTH);
                     log_info("Registered nickname: %s\n", nickname);
-	                char packet[NETWORK_MAX_PACKET_SIZE];
+                    char packet[NETWORK_MAX_PACKET_SIZE];
                     snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MOTD Welcome to da server, %s!", nickname);
                     send_packet((conn_t*)client, packet);
                     cfuhash_put(nicknames_hash, nickname, client->nick);
@@ -399,7 +399,7 @@ int handle_server_packet(server_t *server, char *packet) {
         log_info("Nickname %s joined the network on another server\n", nickname);
         if (cfuhash_exists(nicknames_hash, nickname)) {
             log_info("Nickname collision for '%s'!\n", nickname); 
-	        char packet[NETWORK_MAX_PACKET_SIZE];
+            char packet[NETWORK_MAX_PACKET_SIZE];
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s nickname collision", nickname);
             server_broadcast(packet);
             kill_nickname(nickname, "nickname collision");

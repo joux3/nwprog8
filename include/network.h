@@ -6,7 +6,7 @@
 #include "chat.h"
 
 typedef enum {
-	SERVER, CLIENT
+    SERVER, CLIENT
 } connection_type;
 
 #define NETWORK_MAX_EVENTS 10
@@ -19,21 +19,21 @@ typedef enum {
 #define NETWORK_MAX_PACKET_SIZE 256
 
 typedef struct {
-	int fd;
-	connection_type type;
+    int fd;
+    connection_type type;
 } conn_t;
 
 typedef struct client_struct {
-	conn_t conn;
-	int buf_used;
-	char buf[NETWORK_CLIENT_BUF];	
+    conn_t conn;
+    int buf_used;
+    char buf[NETWORK_CLIENT_BUF];    
     localnick_t *nick;
 } client_t;
 
 typedef struct server_struct {
-	conn_t conn;
-	int buf_used;
-	char buf[NETWORK_SERVER_BUF];	
+    conn_t conn;
+    int buf_used;
+    char buf[NETWORK_SERVER_BUF];    
 } server_t;
 
 // inits the network socket and starts running the event loop

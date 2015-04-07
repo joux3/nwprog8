@@ -217,7 +217,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
         if (nfds == -1) {
             perror("epoll_pwait");
             return -1;
-	    }
+        }
 
         for (int n = 0; n < nfds; ++n) {
             if (events[n].data.ptr == &client_listen_sock) {

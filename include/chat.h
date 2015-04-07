@@ -15,13 +15,13 @@ typedef struct {
 } channel_t;
 
 typedef enum {
-	REMOTE, LOCAL
+    REMOTE, LOCAL
 } nickname_type;
 
 typedef struct {
-	char nickname[NICKNAME_LENGTH];
+    char nickname[NICKNAME_LENGTH];
     nickname_type type;
-	channel_t *channels[USER_MAX_CHANNELS];
+    channel_t *channels[USER_MAX_CHANNELS];
 } nickname_t;
 
 struct client_struct;
