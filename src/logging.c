@@ -16,12 +16,9 @@ int init_logger(log_level level, char *log_filename) {
     return 1;
 }
 
-void do_log(char *level, char *format_string, ...) {
+void do_log(char *level, char *format_string, va_list args) {
     fprintf(log_target, "%s ", level);
-    va_list args;
-    va_start(args, format_string);
-    fprintf(log_target, format_string, args);
-    va_end(args); 
+    vfprintf(log_target, format_string, args);
 }
 
 void log_debug(char *format_string, ...) {
@@ -39,7 +36,7 @@ void log_info(char *format_string, ...) {
     if (logging_level == DEBUG || logging_level == INFO) {
         va_list args;
         va_start(args, format_string);
-        do_log("[WARN]", format_string, args);
+        do_log("[INFO]", format_string, args);
         va_end(args); 
     }
 }

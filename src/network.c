@@ -30,7 +30,7 @@ int network_start(uint16_t client_port, int socket_domain, int socket_protocol, 
         return -1;
     }
     
-    log_debug("Network started\n");
+    log_info("Network started\n");
     if (start_epoll(client_listen_sock, server_listen_sock, socket_domain, socket_protocol, connect_address, connect_address_size) < 0) {
         return -1;
     }
@@ -197,7 +197,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                     connected = 0;
                     close(connect_fd);
                 } else if (!connect_epoll_registered) {
-                    log_debug("Connected to network!\n");
+                    log_info("Connected to network!\n");
                     connect_epoll_registered = 1; 
                     memset(&ev, 0, sizeof(struct epoll_event));
                     ev.events = EPOLLIN;
@@ -225,7 +225,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                     return -1;
                 }
             } else if (events[n].data.ptr == &server_listen_sock) {
-                log_debug("Server connected to ours!\n");
+                log_info("Server connected to ours!\n");
                 if (accept_connection(epollfd, server_listen_sock, SERVER) < 0) {
                     return -1;
                 }

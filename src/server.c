@@ -24,6 +24,21 @@ int get_and_set_port(char *port_str, uint16_t *port) {
     return 1;
 }
 
+int parse_log_level(char *log_level_str, log_level *log_level) {
+    if (strcasecmp(log_level_str, "debug") == 0) {
+        *log_level = DEBUG;
+    } else if (strcasecmp(log_level_str, "info") == 0) {
+        *log_level = INFO;
+    } else if (strcasecmp(log_level_str, "warn") == 0) {
+        *log_level = WARN;
+    } else if (strcasecmp(log_level_str, "error") == 0) {
+        *log_level = ERROR;
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
 // try to get the first possible address match
 // we can't do actual connects yet
 int get_addr(char *host, uint16_t port, int *socket_domain, int *socket_protocol, void **host_address, size_t *host_address_size) {
@@ -112,12 +127,22 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    log_level log_level = INFO;
+    char *log_level_str;
+    if (cfuconf_get_directive_one_arg(config, "log_level", &log_level_str) < 0) {
+        printf("The logging level can be defined with 'log_level'. Possible values are: debug, info, warn, error\n");
+    } else if (!parse_log_level(log_level_str, &log_level)) {
+        printf("Invalid value for 'log_level'!\n");     
+        return 2;
+    }
+    init_logger(log_level, NULL);
+
     cfuconf_destroy(config);
 
-    printf("Using port %d for client connections\n", client_port);
-    printf("Using port %d for server communication\n", server_port);
+    log_info("Using port %d for client connections\n", client_port);
+    log_info("Using port %d for server communication\n", server_port);
     if (client_port == server_port) {
-        printf("Client and server communication ports can't be the same!\n");
+        log_error("Client and server communication ports can't be the same!\n");
         return 2;
     }
 
@@ -125,13 +150,11 @@ int main(int argc, char **argv) {
     size_t server_addr_size;
     int socket_domain, socket_protocol;
     if (connect_to && !get_addr(connect_to, server_port, &socket_domain, &socket_protocol, &server_addr, &server_addr_size)) {
-        printf("Failed to find host %s...\n", connect_to);
+        log_error("Failed to find host %s...\n", connect_to);
         return 3;
     }
 
-    init_logger(DEBUG, NULL);
-
-    printf("Server starting...\n");
+    log_info("Server starting...\n");
     init_packets();
     return network_start(client_port, socket_domain, socket_protocol, server_addr, server_addr_size, server_port);
 }
