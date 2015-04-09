@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    char *log_filename;
+    char *log_filename = NULL;
     if (cfuconf_get_directive_one_arg(config, "log_file", &log_filename) < 0) {
         printf("The log file can be defined with 'log_file'\n");
     }
