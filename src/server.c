@@ -11,6 +11,7 @@
 #include "packets.h"
 #include "cfuconf.h"
 #include "logging.h"
+#include "daemon.h"
 
 int get_and_set_port(char *port_str, uint16_t *port) {
     char *endptr;
@@ -141,8 +142,21 @@ int main(int argc, char **argv) {
         printf("The log file can be defined with 'log_file'\n");
     }
 
+    int daemonize = 0;
+    char *daemonize_str;
+    if (cfuconf_get_directive_one_arg(config, "daemonize", &daemonize_str) < 0) {
+        printf("The server process can be daemonized using config option 'daemonize on'\n");
+    } else if (strcasecmp(daemonize_str, "on") == 0) {
+        daemonize = 1;
+    }
+
     if (client_port == server_port) {
-        log_error("Client and server communication ports can't be the same!\n");
+        printf("Client and server communication ports can't be the same!\n");
+        return 2;
+    }
+
+    if (daemonize && !log_filename) {
+        printf("Log file name must be specified if daemonize is on!\n");
         return 2;
     }
 
@@ -161,6 +175,11 @@ int main(int argc, char **argv) {
     if (connect_to && !get_addr(connect_to, server_port, &socket_domain, &socket_protocol, &server_addr, &server_addr_size)) {
         log_error("Failed to find host %s...\n", connect_to);
         return 3;
+    }
+
+    if (daemonize) {
+        log_info("Daemonizing server...\n");
+        init_daemon();
     }
 
     log_info("Server starting...\n");

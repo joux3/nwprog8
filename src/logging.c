@@ -3,16 +3,20 @@
 #include <sys/stat.h> 
 #include <fcntl.h>
 #include <time.h>
+#include <string.h>
+#include <stdlib.h>
 #include "logging.h"
 
 int initialized = 0;
 log_level logging_level;
 FILE *log_target;
+char *target_filename = NULL;
 
 int init_logger(log_level level, char *log_filename) {
     logging_level = level;
     initialized = 1;
     if (log_filename) {
+        target_filename = strdup(log_filename);
         log_target = fopen(log_filename, "a");
         if (!log_target) {
             perror("Failed to open log file");
@@ -71,4 +75,17 @@ void log_error(char *format_string, ...) {
     va_start(args, format_string);
     do_log("[ERROR]", format_string, args);
     va_end(args); 
+}
+
+void log_reopen() {
+    assert(target_filename);
+    log_info("Reopening the log file\n");
+    // ignore the return value as we can't even log the error anywhere!
+    fclose(log_target); 
+    
+    log_target = fopen(target_filename, "a");
+    if (!log_target) {
+        // we can only exit, no way to write this error anywhere
+        exit(3);
+    }
 }
