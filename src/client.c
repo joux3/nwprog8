@@ -258,6 +258,7 @@ void * send_message(void *ptr) {
 				*/
 				//cfuhash_destroy(channel_list);
 				//free(channel_list);
+				
 				quit = 0;
 				pthread_exit(NULL);//exit(0);
 				continue;
