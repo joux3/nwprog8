@@ -135,16 +135,25 @@ int main(int argc, char **argv) {
         printf("Invalid value for 'log_level'!\n");     
         return 2;
     }
-    init_logger(log_level, NULL);
+
+    char *log_filename;
+    if (cfuconf_get_directive_one_arg(config, "log_file", &log_filename) < 0) {
+        printf("The log file can be defined with 'log_file'\n");
+    }
+
+    if (client_port == server_port) {
+        log_error("Client and server communication ports can't be the same!\n");
+        return 2;
+    }
+
+    if (!init_logger(log_level, log_filename)) {
+        return 3; 
+    }
 
     cfuconf_destroy(config);
 
     log_info("Using port %d for client connections\n", client_port);
     log_info("Using port %d for server communication\n", server_port);
-    if (client_port == server_port) {
-        log_error("Client and server communication ports can't be the same!\n");
-        return 2;
-    }
 
     void *server_addr = NULL;
     size_t server_addr_size;
