@@ -53,7 +53,7 @@ int tcp_connect(const char *host, const char *serv_port) {
 		} else {
 			printf("Bad address\n");
 		}
-		printf("Trying to connect to %d %s\n", res->ai_family, server_addr);
+		printf("Trying to connect to %s\n", server_addr);
 		if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0) 
 		      break;          /* success */
 		perror("Connect failed");
@@ -61,11 +61,15 @@ int tcp_connect(const char *host, const char *serv_port) {
 	} while ( (res = res->ai_next) != NULL);
 
 	if (res == NULL) {      /* errno set from final connect() */
-		fprintf(stderr, "tcp_connect error for %s, %s\n", host, serv_port);
+		fprintf(stderr, "tcp_connect error for"COLOR_CYAN" %s"COLOR_RESET", %s\n", host, serv_port);
 		sockfd = -1;
 		return 1;
 	} else {
-		printf("###Connected to: "COLOR_CYAN"%s "COLOR_RESET"[%s]:%s\n", host, server_addr, serv_port);
+		if (res->ai_family == AF_INET6) {
+			printf("###Connected to: "COLOR_CYAN"%s "COLOR_RESET"[%s]:%s\n", host, server_addr, serv_port);
+		} if (res->ai_family == AF_INET) {
+			printf("###Connected to: "COLOR_CYAN"%s "COLOR_RESET"[%s:%s]\n", host, server_addr, serv_port);
+		}
 	}
 
 	freeaddrinfo(ressave);
@@ -132,7 +136,7 @@ void get_current_time(char *timestamp) {
 }
 
 int quit = 1;
-channel_t *current_channel;
+channel_t *current_channel = NULL;
 
 
 // Read user input and send to server
@@ -251,6 +255,7 @@ void * send_message(void *ptr) {
 				if (current_channel->name[0] == '#') {
 					write(data->socket, tx_buff, strlen(tx_buff));
 				}
+				free(cfuhash_get(channel_list, current_channel->name));
 				cfuhash_delete(channel_list, current_channel->name);
 				channel_t *channel_;
 				char *key;
@@ -291,8 +296,12 @@ void * send_message(void *ptr) {
 			}
 			// Show current channel
 			if (strcmp(line, "/c") == 0) {
+				if (current_channel == NULL) {
+					printf("You are not on a channel\n");
+					continue;
+				}
 				memset(chan_str, 0, sizeof(chan_str));
-				strcat(chan_str, "Current channels: ");
+				strcat(chan_str, "Current channel: ");
 				strcat(chan_str, current_channel->name);
 				printf("%s\n", chan_str);
 				continue;
@@ -325,10 +334,11 @@ void * send_message(void *ptr) {
 				/*quit = 0;
 				pthread_exit(NULL);*/
 				exit(0);
+				// TODO: pthread_create leaks memory
 				continue;
 			}
 			
-			// Send message to 
+			// Send message 
 			if (line[0] != '/' && cfuhash_num_entries(channel_list) > 0) {
 				memset(tx_buff, '\0', sizeof(tx_buff));
 				strcpy(tx_buff, "MSG ");
@@ -344,13 +354,10 @@ void * send_message(void *ptr) {
 				}
 				continue;
 			}	
-			
 			printf("Unknown command\n");
 			
 			//write(data->socket, tx_buff, strlen(tx_buff));
-			
 		}	
-		
 		//sleep(1);
 	}
 }
@@ -497,6 +504,9 @@ int main(int argc, char **argv) {
 	}
 	
 	sockfd = tcp_connect(argv[2], argv[3]);
+	if (sockfd < 0) {
+		return 1;
+	}
 	printf("###Type '/help'for commands\n");
 	
 	data_r.thread_no = 1;
