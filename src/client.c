@@ -90,7 +90,7 @@ channel_t *channel_create(char *channel_name) {
 	//printf("Created channel %s\n", channel_name);
 	strncpy(channel->name, channel_name, CHANNEL_LENGTH);
 	//channel->messages = cfuhash_new();
-	cfuhash_set_flag(channel->messages, CFUHASH_IGNORE_CASE); 
+	//cfuhash_set_flag(channel->messages, CFUHASH_IGNORE_CASE); 
 	return channel;
 }
 
@@ -123,8 +123,9 @@ int my_channels(char *channel_string) {
 	return 0;
 }
 
-
+int quit = 1;
 channel_t *current_channel;
+
 
 // Read user input and send to server
 void * send_message(void *ptr) {
@@ -138,9 +139,12 @@ void * send_message(void *ptr) {
 	strcpy(tx_buff, "NICK ");
 	strcat(tx_buff, data->nick);
 	strcat(tx_buff, "\n");
-	write(data->socket, tx_buff, strlen(tx_buff));
-
+	if (data->socket >= 0) {
+		write(data->socket, tx_buff, strlen(tx_buff));
+	}
+	
 	for(;;) {
+		
 		memset(line, '\0', sizeof(line));
 		memset(tx_buff, '\0', sizeof(tx_buff));
 		scanf(" %[0-9a-zA-ZöÖäÄåÅ!#%&?()/.,:; ]", line);
@@ -243,18 +247,20 @@ void * send_message(void *ptr) {
 			}
 			// Quit TODO: Destroy , free all
 			if (strcmp(line, "/quit") == 0) {
-				char *key;
-				channel_t *channel_;
-				cfuhash_each(channel_list, &key, (void**)&channel_);
-				do {
+				//char *key;
+				//channel_t *channel_;
+				//cfuhash_each(channel_list, &key, (void**)&channel_);
+				/*do {
 					free(channel_);
 					cfuhash_delete(channel_list, channel_->name);
 					
 				} while (cfuhash_next(channel_list, &key, (void**)&channel_));
-				
-				cfuhash_destroy(channel_list);
-				free(channel_list);
-				exit(0);
+				*/
+				//cfuhash_destroy(channel_list);
+				//free(channel_list);
+				quit = 0;
+				pthread_exit(NULL);//exit(0);
+				continue;
 			}
 			
 			// Send message to 
@@ -294,16 +300,26 @@ void * read_socket(void *ptr) {
 	
 	for(;;) {
 		memset(rx_buff, '\0', sizeof(rx_buff));
-		while (rx_buff[read_n - 1] != '\n') {
+		while ((read_n == 0 || rx_buff[read_n - 1] != '\n') && data->socket >= 0) {
 			read_n += read(data->socket, rx_buff + read_n, sizeof(rx_buff));
+			if (quit == 0) {
+			puts("-quit-");
+			pthread_exit(NULL);
+			}
 		}
+		printf("q %d\n", quit);
+		if (quit == 0) {
+			puts("-quit-");
+			pthread_exit(NULL);
+		}
+		
 		
 		while (read_n > 0) {
 			memset(line, 0, sizeof(line));
 			//memset(tmp)
-			//char *rx_line;
+			char *rx_line;
 			//strcpy(rx_line, rx_buff);
-			char *rx_line = strtok(rx_buff, "\n");
+			rx_line = strtok(rx_buff, "\n");
 			char *rx_line_next = strtok(NULL, "\n");
 			char *command = strtok(rx_line, " ");
 			
@@ -382,6 +398,7 @@ void * read_socket(void *ptr) {
 
 
 int main(int argc, char **argv) {
+	
 	
 	int sockfd;
 	pthread_t thread1, thread2;
