@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <sys/stat.h> 
 #include <fcntl.h>
+#include <time.h>
 #include "logging.h"
 
 int initialized = 0;
@@ -25,7 +26,11 @@ int init_logger(log_level level, char *log_filename) {
 }
 
 void do_log(char *level, char *format_string, va_list args) {
-    fprintf(log_target, "%s ", level);
+    time_t msg_time;
+    struct tm *tm_p;
+    msg_time = time(NULL);
+    tm_p = localtime(&msg_time);
+    fprintf(log_target, "%.2d:%.2d:%.2d %s ", tm_p->tm_hour, tm_p->tm_min, tm_p->tm_sec, level); 
     vfprintf(log_target, format_string, args);
     fflush(log_target);
 }
