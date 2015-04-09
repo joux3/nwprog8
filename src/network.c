@@ -44,7 +44,7 @@ int start_listening(uint16_t port) {
 
     // create socket for listening
     if ((listenfd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
-        perror("socket");
+        log_error("Failed to create socket! Error: %s\n", strerror(errno));
         return -1;
     }
 
@@ -52,7 +52,7 @@ int start_listening(uint16_t port) {
     int yes = 1;
     if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
     {
-        perror("setsockopt");
+        log_error("Failed to set SO_REUSEADDR! Error: %s\n", strerror(errno));
     }
 
     // Pick a port and bind socket to it.
@@ -64,13 +64,13 @@ int start_listening(uint16_t port) {
 
     if (bind(listenfd, (struct sockaddr *) &servaddr,
         sizeof(servaddr)) < 0) {
-        perror("bind");
+        log_error("Failed to bind to port %d! Error: %s\n", port, strerror(errno));
         return -1;
     }
 
     // Set the socket to passive mode, with specified listen queue size
     if (listen(listenfd, NETWORK_LISTEN_Q) < 0) {
-        perror("listen");
+        log_error("Failed to listen to socket! Error: %s\n", strerror(errno));
         return -1;
     }
 
@@ -82,7 +82,7 @@ int start_listening(uint16_t port) {
 int make_nonblock(int sockfd) {
     int val = fcntl(sockfd, F_GETFL, 0);
     if (fcntl(sockfd, F_SETFL, val | O_NONBLOCK) < 0) {
-        perror("fcntl(sockfd)");
+        log_error("Failed to make socket nonblocking! Error: %s\n", strerror(errno));
         return -1;
     }
     return 1;
@@ -153,21 +153,21 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
 
     epollfd = epoll_create1(0);
     if (epollfd == -1) {
-        perror("epoll_create1");
+        log_error("Failed to call epoll_create1! Error: %s\n", strerror(errno));
         return -1;
     }
 
     ev.events = EPOLLIN;
     ev.data.ptr = &client_listen_sock;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, client_listen_sock, &ev) == -1) {
-        perror("epoll_ctl: client_listen_sock");
+        log_error("Failed to call epoll_ctl for client_listen_sock! Error: %s\n", strerror(errno));
         return -1;
     }
 
     ev.events = EPOLLIN;
     ev.data.ptr = &server_listen_sock;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, server_listen_sock, &ev) == -1) {
-        perror("epoll_ctl: server_listen_sock");
+        log_error("Failed to call epoll_ctl for server_listen_sock! Error: %s\n", strerror(errno));
         return -1;
     }
 
@@ -180,7 +180,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                 int res = connect(connect_fd, (struct sockaddr *)connect_address, connect_address_size);
                 log_debug("Server connecting to network...\n");
                 if (res < 0 && errno != EINPROGRESS) {
-                    perror("connect");
+                    log_error("Failed to call connect! Error: %s\n", strerror(errno));
                     return -1;
                 }
                 connected = 1;
@@ -190,7 +190,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                 socklen_t error_len = sizeof(error);
                 int res = getsockopt(connect_fd, SOL_SOCKET, SO_ERROR, &error, &error_len) < 0;
                 if (res < 0) {
-                    perror("getsockopt"); 
+                    log_error("Failed to call getsockopt! Error: %s\n", strerror(errno));
                     return -1;
                 } else if (error != 0) { 
                     log_debug("connection error %d\n", error);
@@ -206,7 +206,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                     handle_server_connect(server);
                     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connect_fd,
                                 &ev) == -1) {
-                        perror("epoll_ctl: conn_sock");
+                        log_error("Failed to call epoll_ctl for conn_sock! Error: %s\n", strerror(errno));
                         return -1;
                     }
                 }
@@ -215,7 +215,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
 
         nfds = epoll_wait(epollfd, events, NETWORK_MAX_EVENTS, 1000);
         if (nfds == -1) {
-            perror("epoll_pwait");
+            log_error("Failed to call epoll_wait! Error: %s\n", strerror(errno));
             return -1;
         }
 
@@ -253,7 +253,7 @@ int accept_connection(int epollfd, int listen_sock, connection_type type) {
     socklen_t addrlen = sizeof(cliaddr);
     int conn_sock = accept(listen_sock, (struct sockaddr *) &cliaddr, &addrlen);
     if (conn_sock == -1) {
-        perror("accept");
+        log_error("Failed to call accept! Error: %s\n", strerror(errno));
         return -1;
     }
     make_nonblock(conn_sock);
@@ -266,9 +266,8 @@ int accept_connection(int epollfd, int listen_sock, connection_type type) {
     } else if (type == CLIENT) {
         ev.data.ptr = client_create(conn_sock); // TODO: client_create can return NULL
     }
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_sock,
-                &ev) == -1) {
-        perror("epoll_ctl: conn_sock");
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_sock, &ev) == -1) {
+        log_error("Failed to call epoll_ctl for conn_sock! Error: %s\n", strerror(errno));
         return -1;
     }
     return 1;
@@ -310,7 +309,7 @@ int read_for_conn(conn_t *conn) {
         } else if (n == 0) {
             client_free(client);
         } else {
-            perror("read ");
+            log_error("Failed to call read! Error: %s\n", strerror(errno));
             // TODO: check that errno isn't EAGAIN or EWOULDBLOCK 
             // (though in theory this shouldn't be possible)
             client_free(client);
@@ -350,7 +349,7 @@ int read_for_conn(conn_t *conn) {
         } else if (n == 0) {
             server_free(server);
         } else {
-            perror("read ");
+            log_error("Failed to call read! Error: %s\n", strerror(errno));
             // TODO: check that errno isn't EAGAIN or EWOULDBLOCK 
             // (though in theory this shouldn't be possible)
             server_free(server);
@@ -370,7 +369,7 @@ int network_send(conn_t *conn, const void *data, const size_t size) {
             // Note: this could also be caused by error EWOULDBLOCK or EAGAIN
             // if this happens very often, userland side send buffering could also be used
             // (or kernel side buffers increased)
-            perror("write"); 
+            log_error("Failed to call write! Perhaps a kernel buffer is full? Error: %s\n", strerror(errno));
             conn_free(conn); 
             return -1;
         } else if (n == 0) {
@@ -382,7 +381,7 @@ int network_send(conn_t *conn, const void *data, const size_t size) {
     char newline = '\n';
     int n = write(conn->fd, &newline, 1);
     if (n < 0) {
-        perror("write"); 
+        log_error("Failed to call write! Perhaps a kernel buffer is full? Error: %s\n", strerror(errno));
         conn_free(conn); 
         return -1;
     } else if (n == 0) {
@@ -394,7 +393,7 @@ int network_send(conn_t *conn, const void *data, const size_t size) {
 int create_connect_fd(int socket_domain, int socket_protocol) {
     int connect_fd;
     if ((connect_fd = socket(socket_domain, SOCK_STREAM, socket_protocol)) < 0) {
-        perror("socket error");
+        log_error("Failed to create connect socket? Error: %s\n", strerror(errno));
         return -1;
     }     
 
