@@ -18,7 +18,8 @@ typedef struct {
 typedef struct {
 	//int id;
 	char name[CHANNEL_LENGTH];
-	cfuhash_table_t *messages;
+	//cfuhash_table_t *messages;
 } channel_t;
+
 
 #endif
