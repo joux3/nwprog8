@@ -191,8 +191,6 @@ void * send_message(void *ptr) {
 					strcat(tx_buff, channel_name);
 					strcat(tx_buff, "\n");
 					
-					
-					
 					write(data->socket, tx_buff, strlen(tx_buff));
 					continue;
 				} else {
@@ -200,7 +198,7 @@ void * send_message(void *ptr) {
 					continue;
 				}
 			}
-			// TODO: Private message
+			// Private message
 			if (strcmp(command, "/p") == 0) {
 				if (cfuhash_num_entries(channel_list) >= USER_MAX_CHANNELS) {
 					printf("Max channel count already reached\n");
@@ -244,7 +242,7 @@ void * send_message(void *ptr) {
 				}
 			}
 			
-			// Leave channel	; TODO: fails
+			// Leave channel;
 			if (strcmp(line, "/l") == 0) {
 				strcpy(tx_buff, "LEAVE ");
 				strcat(tx_buff, current_channel->name);
@@ -291,30 +289,42 @@ void * send_message(void *ptr) {
 				printf("%s\n", chan_str);
 				continue;
 			}
+			// Show current channel
+			if (strcmp(line, "/c") == 0) {
+				memset(chan_str, 0, sizeof(chan_str));
+				strcat(chan_str, "Current channels: ");
+				strcat(chan_str, current_channel->name);
+				printf("%s\n", chan_str);
+				continue;
+			}
 			// Help
 			if (strcmp(line, "/help") == 0) {
 				puts("/j #<channel_name>  Join channel or change active channel");
+				puts("/p <nick> <message> Open private messaging");
 				puts("/l                  Leave channel");
 				puts("/names              Show users on channel");
 				puts("/ch                 Show current channels");
+				puts("/c                  Show current channel");
+				puts("/quit               Quit");
 				continue;
 			}
-			// Quit TODO: Destroy , free all
+			// Quit 
 			if (strcmp(line, "/quit") == 0) {
-				//char *key;
-				//channel_t *channel_;
-				//cfuhash_each(channel_list, &key, (void**)&channel_);
-				/*do {
-					free(channel_);
-					cfuhash_delete(channel_list, channel_->name);
+				char *key;
+				channel_t *channel_ = NULL;
+				cfuhash_each(channel_list, &key, (void**)&channel_);
+				do {
+					if (channel_ != NULL) {
+						free(channel_);
+					}
 					
 				} while (cfuhash_next(channel_list, &key, (void**)&channel_));
-				*/
-				//cfuhash_destroy(channel_list);
-				//free(channel_list);
 				
-				quit = 0;
-				pthread_exit(NULL);//exit(0);
+				cfuhash_destroy(channel_list);
+				
+				/*quit = 0;
+				pthread_exit(NULL);*/
+				exit(0);
 				continue;
 			}
 			
@@ -354,10 +364,6 @@ void * read_socket(void *ptr) {
 	thdata *data;
 	data = (thdata *) ptr;
 	
-	/*time_t msg_time;
-	struct tm *tm_p;
-	*/
-	
 	for(;;) {
 		memset(rx_buff, '\0', sizeof(rx_buff));
 		while ((read_n == 0 || rx_buff[read_n - 1] != '\n') && data->socket >= 0) {
@@ -383,10 +389,6 @@ void * read_socket(void *ptr) {
 			char *rx_line_next = strtok(NULL, "\n");
 			char *command = strtok(rx_line, " ");
 			
-			/*msg_time = time(NULL);
-			tm_p = localtime(&msg_time);
-			sprintf(timestamp, "[%.2d:%.2d] ", tm_p->tm_hour, tm_p->tm_min);*/
-			
 			get_current_time(timestamp);
 			strcpy(line, timestamp);
 		
@@ -394,7 +396,7 @@ void * read_socket(void *ptr) {
 				
 				char *sender = strtok(NULL, " ");
 				char *destination = strtok(NULL, " ");
-				if (destination[0] == '#') {
+				if (destination[0] == '#') { // Message from channel
 					//const char *channel_name_of_msg = strtok(NULL, " ");
 					if (cfuhash_exists(channel_list, current_channel->name) == 1) {
 						strcat(line, sender);
@@ -403,8 +405,7 @@ void * read_socket(void *ptr) {
 						strcat(line, "> ");
 						strcat(line, strtok(NULL, "\n"));
 					}
-				} else {
-					//char * receiver = strtok(NULL, " ");
+				} else { // Private message
 					if (strcmp(data->nick, destination) == 0) { // Check if receiver is user
 						if (get_or_add_channel(sender) == NULL) {
 							printf("%s"COLOR_CYAN"%s"COLOR_RESET" opened private messaging\n", timestamp, sender);
