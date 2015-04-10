@@ -197,7 +197,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                     return -1;
                 } else if (error != 0) { 
                     // connection attempt failed
-                    log_debug("connection error %d\n", error);
+                    log_debug("connection error: %s\n", strerror(error));
                     connected = 0;
                     close(connect_fd);
                 } else if (!connect_epoll_registered) {
