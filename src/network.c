@@ -174,8 +174,10 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
     int connect_epoll_registered = 0;
     
     for (;;) {
+        // if we have the address of another server to connect to
         if (connect_address) {
             if (!connected) {
+                // connect not called yet
                 connect_fd = create_connect_fd(socket_domain, socket_protocol);
                 int res = connect(connect_fd, (struct sockaddr *)connect_address, connect_address_size);
                 log_debug("Server connecting to network...\n");
@@ -186,6 +188,7 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                 connected = 1;
                 connect_epoll_registered = 0;
             } else {
+                // connect called, poll its status
                 int error;
                 socklen_t error_len = sizeof(error);
                 int res = getsockopt(connect_fd, SOL_SOCKET, SO_ERROR, &error, &error_len) < 0;
@@ -193,10 +196,13 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
                     log_error("Failed to call getsockopt! Error: %s\n", strerror(errno));
                     return -1;
                 } else if (error != 0) { 
+                    // connection attempt failed
                     log_debug("connection error %d\n", error);
                     connected = 0;
                     close(connect_fd);
                 } else if (!connect_epoll_registered) {
+                    // connection to another server ok,
+                    // start handling this connection via epoll aswell
                     log_info("Connected to network!\n");
                     connect_epoll_registered = 1; 
                     memset(&ev, 0, sizeof(struct epoll_event));
@@ -221,15 +227,18 @@ int start_epoll(int client_listen_sock, int server_listen_sock, int socket_domai
 
         for (int n = 0; n < nfds; ++n) {
             if (events[n].data.ptr == &client_listen_sock) {
+                // connecting client
                 if (accept_connection(epollfd, client_listen_sock, CLIENT) < 0) {
                     return -1;
                 }
             } else if (events[n].data.ptr == &server_listen_sock) {
+                // connecting server
                 log_info("Server connected to ours!\n");
                 if (accept_connection(epollfd, server_listen_sock, SERVER) < 0) {
                     return -1;
                 }
             } else if (events[n].events & EPOLLIN) {
+                // data available for a connection (or an error condition)
                 conn_t *conn = events[n].data.ptr;
                 if (read_for_conn(conn) < 0) {
                     return -1;

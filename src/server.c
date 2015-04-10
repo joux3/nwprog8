@@ -160,6 +160,11 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    if (daemonize && pid_file_exists()) {
+        printf("A pid file at %s already exists!\n", PID_FILE_PATH);
+        return 4;
+    }
+
     if (!init_logger(log_level, log_filename)) {
         return 3; 
     }
