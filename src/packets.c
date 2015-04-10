@@ -27,6 +27,9 @@ void send_packet(conn_t *conn, char *packet) {
     network_send(conn, packet, strlen(packet));
 }
 
+// gets a connection for a nickname:
+// - actual client connection for a local nickname
+// - server connection for a remote nickname
 conn_t *get_conn_for(nickname_t *nick) {
     if (nick->type == LOCAL) {
         return (conn_t*)(((localnick_t*)nick)->client);
@@ -68,6 +71,7 @@ void channel_destroy(channel_t *channel) {
     free(channel);
 }
 
+// broadcasts a packet to all the servers we a have a connection with
 void server_broadcast(char *packet) {
     void *cur_key, *cur_data;
     size_t key_len, data_len;
@@ -79,6 +83,8 @@ void server_broadcast(char *packet) {
     }
 }
 
+// broadcast a packet to all the local clients on a channel
+// also can broadcast to servers with the parameter broadcast_servers
 void channel_broadcast(channel_t *channel, char *packet, int broadcast_servers) {
     if (broadcast_servers) {
         server_broadcast(packet);
@@ -94,6 +100,9 @@ void channel_broadcast(channel_t *channel, char *packet, int broadcast_servers) 
     } while (cfuhash_next(channel->nicknames, &key, (void**)&channel_nick));
 }
 
+// creates a NAMES packet or multiple NAMES packets for a certain client
+// about nicknames on a channel
+// (multiple packets are generated if the nicknames don't fit in one)
 void send_channel_names(client_t *client, channel_t *channel) {
     char packet[NETWORK_MAX_PACKET_SIZE];
     memset(packet, 0, NETWORK_MAX_PACKET_SIZE); 
@@ -116,6 +125,7 @@ void send_channel_names(client_t *client, channel_t *channel) {
         strcpy(&packet[current_start + 1], nick);
         current_start += nicklen + 1;
     } while (cfuhash_next(channel->nicknames, &nick, (void**)&channel_nick));
+    // send the rest if left
     if (current_start != packet_header_size) {
         send_packet((conn_t*)client, packet);
     }
@@ -139,6 +149,7 @@ int handle_client_packet(client_t *client, char *packet) {
 int handle_unregistered_packet(client_t *client, char *packet) {
     char *command = strtok(packet, " ");
     if (command != NULL && strcmp(command, "NICK") == 0) {
+        // nickname registration from client
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             log_debug("Unregistered user illegal nick, dropping\n");
@@ -184,6 +195,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         return 0;
     }
     if (strcmp(command, "MSG") == 0) {
+        // MSG <destination> msg\n packet handler
         if (strcmp(command, "MSG") != 0) {
             return 0;
         }
@@ -213,6 +225,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         }
         return 0;
     } else if (strcmp(command, "JOIN") == 0) {
+        // JOIN <channel>\n packet handler
         char *channel_name = strtok(NULL, " ");
         if (channel_name == NULL || strlen(channel_name) < CHANNEL_MIN_LENGTH || strlen(channel_name) >= CHANNEL_LENGTH || channel_name[0] != '#') {
             send_packet((conn_t*)client, "CMDREPLY Illegal channel name");
@@ -250,6 +263,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         send_channel_names(client, channel);
         return 0;
     } else if (strcmp(command, "LEAVE") == 0) {
+        // LEAVE <channel>\n packet handler
         char *channel_name = strtok(NULL, " ");
         if (channel_name == NULL) {
             send_packet((conn_t*)client, "CMDREPLY Illegal channel name");
@@ -280,6 +294,7 @@ int handle_registered_packet(client_t *client, char *packet) {
         log_info("User '%s' left channel '%s'\n", client->nick->nick.nickname, channel_name);
         return 0;
     } else if (strcmp(command, "NAMES") == 0) {
+        // NAMES <channel>\n packet
         char *channel_name = strtok(NULL, " ");
         if (channel_name == NULL) {
             send_packet((conn_t*)client, "CMDREPLY Illegal channel name");
@@ -303,17 +318,24 @@ int handle_registered_packet(client_t *client, char *packet) {
     return 0;
 }
 
+// removes a nickname from all the channel datastructures
+// sends a single KILL message to local clients that are atleast on one
+// shared channel with the nickname
+// reason is broadcast across the network and finally the clients
 void remove_from_channels(nickname_t *nick, char *reason) {
     // local nicknames that already know about the disconnect
     cfuhash_table_t *already_sent = cfuhash_new();
     for (int i = 0; i < USER_MAX_CHANNELS; i++) {
         if (nick->channels[i] != NULL) {
             channel_t *channel = nick->channels[i];
+            // remove nickname from channel
             void *res = cfuhash_delete(channel->nicknames, nick->nickname);
             assert(res != NULL);
             if (cfuhash_num_entries(channel->nicknames) == 0) {
+                // delete channels as it's the last nickname on it
                 channel_destroy(channel); 
             } else {
+                // tell others on the channel about the nickname being killed
                 char *key;
                 nickname_t *channel_nick;
                 char packet[NETWORK_MAX_PACKET_SIZE];
@@ -350,6 +372,8 @@ void handle_client_disconnect(client_t *client) {
     }
 }
 
+// remove a nickname from all the data structures and finally tell local clients about it
+// also kill the tcp connection if the nickname is local
 void kill_nickname(char *nickname, char *reason) {
     nickname_t *res = (nickname_t*)cfuhash_delete(nicknames_hash, nickname);
     if (res) {
@@ -392,18 +416,22 @@ int handle_server_packet(server_t *server, char *packet) {
     }
 
     if (strcmp(command, "NICK") == 0) {
+        // NICK <nickname>\n packet
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             return 0;
         }
         log_info("Nickname %s joined the network on another server\n", nickname);
         if (cfuhash_exists(nicknames_hash, nickname)) {
+            // we already know about this nickname! it's a nickname collision,
+            // probably after a netslipt is over
             log_info("Nickname collision for '%s'!\n", nickname); 
             char packet[NETWORK_MAX_PACKET_SIZE];
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "KILL %s nickname collision", nickname);
             server_broadcast(packet);
             kill_nickname(nickname, "nickname collision");
         } else {
+            // create a remote nickname structure
             remotenick_t *nick = malloc(sizeof(remotenick_t));
             nick->nick.type = REMOTE;
             nick->server = server;
@@ -412,6 +440,7 @@ int handle_server_packet(server_t *server, char *packet) {
             cfuhash_put(nicknames_hash, nickname, nick);
         }
     } else if (strcmp(command, "KILL") == 0) {
+        // KILL <nickname> <reason>\n packet
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             return 0;
@@ -422,6 +451,7 @@ int handle_server_packet(server_t *server, char *packet) {
         }
         kill_nickname(nickname, reason);
     } else if (strcmp(command, "MSG") == 0) {
+        // MSG <sender> <destination> msg\n packet
         char *sender = strtok(NULL, " ");
         if (sender == NULL) {
             return 0;
@@ -435,6 +465,7 @@ int handle_server_packet(server_t *server, char *packet) {
             return 0;
         }
         if (cfuhash_exists(nicknames_hash, destination)) {
+            // user -> user packet
             nickname_t *target = (nickname_t*)cfuhash_get(nicknames_hash, destination);
             if (target->type == LOCAL) {
                 char packet[NETWORK_MAX_PACKET_SIZE];
@@ -442,12 +473,14 @@ int handle_server_packet(server_t *server, char *packet) {
                 send_packet(get_conn_for(target), packet);
             }
         } else if (cfuhash_exists(channels_hash, destination)) {
+            // user -> channel packet
             channel_t *channel = (channel_t*)cfuhash_get(channels_hash, destination);
             char packet[NETWORK_MAX_PACKET_SIZE];
             snprintf(packet, NETWORK_MAX_PACKET_SIZE, "MSG %s %s %s", sender, destination, msg);
             channel_broadcast(channel, packet, 0);
         }
     } else if (strcmp(command, "JOIN") == 0) {
+        // JOIN <nickname> <channel>\n packet
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             return 0;
@@ -459,6 +492,8 @@ int handle_server_packet(server_t *server, char *packet) {
         nickname_t *nick = cfuhash_get(nicknames_hash, nickname);
         if (nick && nick->type == REMOTE &&
             ((remotenick_t*)nick)->server == server) {
+            // we should only get JOINs for remote nicknames. and the server should be the one
+            // that told us about the nickname in the first place
             channel_t *channel = get_or_create_channel(channel_name);
             cfuhash_put(channel->nicknames, nick->nickname, nick);
             char packet[NETWORK_MAX_PACKET_SIZE];
@@ -478,6 +513,7 @@ int handle_server_packet(server_t *server, char *packet) {
             return 0;
         }
     } else if (strcmp(command, "LEAVE") == 0) {
+        // LEAVE <nickname> <channel>\n packet
         char *nickname = strtok(NULL, " ");
         if (nickname == NULL) {
             return 0;
@@ -489,6 +525,8 @@ int handle_server_packet(server_t *server, char *packet) {
         nickname_t *nick = cfuhash_get(nicknames_hash, nickname);
         if (nick && nick->type == REMOTE &&
             ((remotenick_t*)nick)->server == server) {
+            // we should only get LEAVEs for remote nicknames. and the server should be the one
+            // that told us about the nickname in the first place
             channel_t *channel = cfuhash_get(channels_hash, channel_name);
             if (channel && cfuhash_exists(channel->nicknames, nick->nickname)) {
                 int removed = 0;
