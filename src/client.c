@@ -27,7 +27,6 @@
 int tcp_connect(const char *host, const char *serv_port) {
 	int sockfd, n;
 	char server_addr[80];
-	//char *serv = serv_port;
 	struct addrinfo hints, *res, *ressave;
 
 	memset(&hints, 0, sizeof(struct addrinfo));
@@ -92,10 +91,7 @@ channel_t *channel_create(char *channel_name) {
 	channel_t *channel = malloc(sizeof(channel_t));
 	if (channel == NULL)
 	  return NULL;
-	//printf("Created channel %s\n", channel_name);
 	strncpy(channel->name, channel_name, CHANNEL_LENGTH);
-	//channel->messages = cfuhash_new();
-	//cfuhash_set_flag(channel->messages, CFUHASH_IGNORE_CASE); 
 	return channel;
 }
 
@@ -103,7 +99,6 @@ channel_t *get_or_add_channel(char *channel_name) {
 	channel_t *channel = cfuhash_get(channel_list, channel_name); 
 	if (channel == NULL) {
 		channel = channel_create(channel_name);
-		//if (channel == NULL)
 		cfuhash_put(channel_list, channel_name, channel);
 		return NULL;
 	}
@@ -218,7 +213,6 @@ void * send_message(void *ptr) {
 				}
 				char *channel_name;
 				char *message;
-				//memset(message, '\0', sizeof(message));
 				channel_name = strtok(NULL, " ");
 				message = strtok(NULL, "\n");
 				
@@ -346,9 +340,7 @@ void * send_message(void *ptr) {
 				cfuhash_destroy(channel_list);
 				
 				quit = 0;
-				//pthread_exit(NULL);
 				exit(0);
-				// TODO: pthread_create leaks memory
 				continue;
 			}
 			
@@ -373,9 +365,7 @@ void * send_message(void *ptr) {
 			}	
 			printf("Unknown command\n");
 			
-			//write(data->socket, tx_buff, strlen(tx_buff));
 		}	
-		//sleep(1);
 	}
 }
 
@@ -397,7 +387,6 @@ void * read_socket(void *ptr) {
 			}
 			read_n += read(data->socket, rx_buff + read_n, sizeof(rx_buff));
 		}
-		//printf("q %d\n", quit);
 		if (quit == 0) {
 			puts("-quit-");
 			pthread_exit(NULL);
@@ -406,9 +395,7 @@ void * read_socket(void *ptr) {
 		
 		while (read_n > 0) {
 			memset(line, 0, sizeof(line));
-			//memset(tmp)
 			char *rx_line;
-			//strcpy(rx_line, rx_buff);
 			rx_line = strtok(rx_buff, "\n");
 			char *rx_line_next = strtok(NULL, "\n");
 			char *command = strtok(rx_line, " ");
@@ -421,7 +408,6 @@ void * read_socket(void *ptr) {
 				char *sender = strtok(NULL, " ");
 				char *destination = strtok(NULL, " ");
 				if (destination[0] == '#') { // Message from channel
-					//const char *channel_name_of_msg = strtok(NULL, " ");
 					if (cfuhash_exists(channel_list, current_channel->name) == 1) {
 						strcat(line, sender);
 						strcat(line, "/");
@@ -433,7 +419,6 @@ void * read_socket(void *ptr) {
 					if (strcmp(data->nick, destination) == 0) { // Check if receiver is user
 						if (get_or_add_channel(sender) == NULL) {
 							printf("%s"COLOR_CYAN"%s"COLOR_RESET" opened private messaging\n", timestamp, sender);
-							//current_channel = get_or_add_channel(sender);
 						}
 						strcat(line, sender);
 						strcat(line, "/");
