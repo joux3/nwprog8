@@ -203,13 +203,14 @@ void * send_message(void *ptr) {
 				}
 			}
 			// Private message
-			if (strcmp(command, "/p") == 0) {
+			if (strcmp(command, "/msg") == 0) {
 				if (cfuhash_num_entries(channel_list) >= USER_MAX_CHANNELS) {
 					printf("Max channel count already reached\n");
 					continue;
 				}
 				char channel_name[NICKNAME_LENGTH];
 				char message[MAX_LENGTH];
+				memset(message, '\0', sizeof(message));
 				strcpy(channel_name, strtok(NULL, " "));
 				strcpy(message, strtok(NULL, "\n"));
 				
@@ -248,29 +249,34 @@ void * send_message(void *ptr) {
 			
 			// Leave channel;
 			if (strcmp(line, "/l") == 0) {
-				strcpy(tx_buff, "LEAVE ");
-				strcat(tx_buff, current_channel->name);
-				strcat(tx_buff, "\n");
-				printf("You left the channel "COLOR_CYAN"%s"COLOR_RESET"\n", current_channel->name);
-				if (current_channel->name[0] == '#') {
-					write(data->socket, tx_buff, strlen(tx_buff));
-				}
-				free(cfuhash_get(channel_list, current_channel->name));
-				cfuhash_delete(channel_list, current_channel->name);
-				channel_t *channel_;
-				char *key;
-				cfuhash_each(channel_list, &key, (void**)&channel_);
+				if (current_channel != NULL) {
+					strcpy(tx_buff, "LEAVE ");
+					strcat(tx_buff, current_channel->name);
+					strcat(tx_buff, "\n");
+					printf("You left the channel "COLOR_CYAN"%s"COLOR_RESET"\n", current_channel->name);
 				
-				while (cfuhash_next(channel_list, &key, (void**)&channel_)) {
-				}
-				if (cfuhash_num_entries(channel_list) != 0) {
-					current_channel = channel_;
-					printf("Active channel changed to %s\n", current_channel->name);
-				} else {
+					if (current_channel->name[0] == '#') {
+						write(data->socket, tx_buff, strlen(tx_buff));
+					}
+					
+					cfuhash_delete(channel_list, current_channel->name);
+					free(current_channel);
+					channel_t *channel_;
+					char *key;
+					cfuhash_each(channel_list, &key, (void**)&channel_);
+				
+					while (cfuhash_next(channel_list, &key, (void**)&channel_)) {
+					}
+					if (cfuhash_num_entries(channel_list) != 0) {
+						current_channel = channel_;
+						printf("Active channel changed to %s\n", current_channel->name);
+					} else {
 					current_channel = NULL;
+					} 
+					
+				} else {
 					printf("You are not on any channel\n");
 				}
-				
 				continue;
 			} 
 			
@@ -308,12 +314,12 @@ void * send_message(void *ptr) {
 			}
 			// Help
 			if (strcmp(line, "/help") == 0) {
-				puts("/j #<channel_name>  Join channel or change active channel");
-				puts("/p <nick> <message> Open private messaging");
-				puts("/l                  Leave channel");
-				puts("/names              Show users on channel");
-				puts("/ch                 Show current channels");
-				puts("/c                  Show current channel");
+				puts("/j #<channel_name>    Join channel or change active channel");
+				puts("/msg <nick> <message> Open private messaging");
+				puts("/l                    Leave channel");
+				puts("/names                Show users on channel");
+				puts("/ch                   Show current channels");
+				puts("/c                    Show current channel");
 				puts("/quit               Quit");
 				continue;
 			}
@@ -416,7 +422,7 @@ void * read_socket(void *ptr) {
 					if (strcmp(data->nick, destination) == 0) { // Check if receiver is user
 						if (get_or_add_channel(sender) == NULL) {
 							printf("%s"COLOR_CYAN"%s"COLOR_RESET" opened private messaging\n", timestamp, sender);
-							current_channel = get_or_add_channel(sender);
+							//current_channel = get_or_add_channel(sender);
 						}
 						strcat(line, sender);
 						strcat(line, "/");
