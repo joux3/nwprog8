@@ -169,6 +169,10 @@ void * send_message(void *ptr) {
 			memset(command_string, 0, sizeof(command_string));
 			strcpy(command_string, tx_buff);
 			char *command = strtok(command_string, " ");
+			if (command == NULL) {
+				printf("illegal command\n");
+				continue;
+			}
 			
 			// Join channel
 			if (strcmp(command, "/j") == 0) {
@@ -177,8 +181,11 @@ void * send_message(void *ptr) {
 					continue;
 				}
 				
-				char channel_name[CHANNEL_LENGTH];
-				strcpy(channel_name, strtok(NULL, "\n"));
+				char *channel_name = strtok(NULL, "\n");
+				if (channel_name == NULL) {
+					printf("illegal command\n");
+					continue;
+				}
 				
 				if (cfuhash_num_entries(channel_list) == 0) {
 					strcpy(chan_tmp, channel_name);
@@ -208,13 +215,13 @@ void * send_message(void *ptr) {
 					printf("Max channel count already reached\n");
 					continue;
 				}
-				char channel_name[NICKNAME_LENGTH];
-				char message[MAX_LENGTH];
-				memset(message, '\0', sizeof(message));
-				strcpy(channel_name, strtok(NULL, " "));
-				strcpy(message, strtok(NULL, "\n"));
+				char *channel_name;
+				char *message;
+				//memset(message, '\0', sizeof(message));
+				channel_name = strtok(NULL, " ");
+				message = strtok(NULL, "\n");
 				
-				if (message == NULL) {
+				if (message == NULL || channel_name == NULL) {
 					printf("illegal command\n");
 					continue;
 				}
@@ -337,9 +344,9 @@ void * send_message(void *ptr) {
 				
 				cfuhash_destroy(channel_list);
 				
-				/*quit = 0;
-				pthread_exit(NULL);*/
-				exit(0);
+				quit = 0;
+				pthread_exit(NULL);
+				//exit(0);
 				// TODO: pthread_create leaks memory
 				continue;
 			}
@@ -380,17 +387,17 @@ void * read_socket(void *ptr) {
 	for(;;) {
 		memset(rx_buff, '\0', sizeof(rx_buff));
 		while ((read_n == 0 || rx_buff[read_n - 1] != '\n') && data->socket >= 0) {
+			if (quit == 0) {
+				puts("-quit-");
+				pthread_exit(NULL);
+			}
 			read_n += read(data->socket, rx_buff + read_n, sizeof(rx_buff));
-			/*if (quit == 0) {
-			puts("-quit-");
-			pthread_exit(NULL);
-			}*/
 		}
-		/*printf("q %d\n", quit);
+		//printf("q %d\n", quit);
 		if (quit == 0) {
 			puts("-quit-");
 			pthread_exit(NULL);
-		}*/
+		}
 		
 		
 		while (read_n > 0) {
@@ -528,9 +535,10 @@ int main(int argc, char **argv) {
 		perror("pthread_create"); 
 	if ((pthread_create (&thread2, NULL,  &send_message, (void *) &data_w)) !=0)
 		perror("pthread_create");
-
+	
 	pthread_join(thread1, NULL);
 	pthread_join(thread2, NULL);
+	
 	
 	return 0;
 }
