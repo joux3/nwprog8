@@ -487,7 +487,13 @@ void * read_socket(void *ptr) {
 			printf("%s\n", line);
 			
 			if(rx_line_next != NULL) {
-				strcpy(rx_line, rx_line_next);
+                while (1) {
+                    *rx_line = *rx_line_next;
+                    if (*rx_line_next == '\0') {
+                       break; 
+                    }
+                    rx_line++; rx_line_next++;
+                }
 			} else {
 				read_n = 0;
 			}
