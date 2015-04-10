@@ -63,6 +63,7 @@ int tcp_connect(const char *host, const char *serv_port) {
 	if (res == NULL) {      /* errno set from final connect() */
 		fprintf(stderr, "tcp_connect error for"COLOR_CYAN" %s"COLOR_RESET", %s\n", host, serv_port);
 		sockfd = -1;
+		exit(1);
 		return 1;
 	} else {
 		if (res->ai_family == AF_INET6) {
@@ -159,7 +160,7 @@ void * send_message(void *ptr) {
 		
 		memset(line, '\0', sizeof(line));
 		memset(tx_buff, '\0', sizeof(tx_buff));
-		scanf(" %[0-9a-zA-ZöÖäÄåÅ!#%&?()/.,:; ]", line);
+		scanf(" %[0-9a-zA-ZöÖäÄåÅ!#%&?()/.,:;' ]", line);
 		printf(MOVE_CURSOR_UP);
 		strcpy(tx_buff, line);
 		strcat(tx_buff, "\n");
@@ -326,8 +327,8 @@ void * send_message(void *ptr) {
 				puts("/l                    Leave channel");
 				puts("/names                Show users on channel");
 				puts("/ch                   Show current channels");
-				puts("/c                    Show current channel");
-				puts("/quit               Quit");
+				puts("/c                    Show active channel");
+				puts("/quit                 Quit");
 				continue;
 			}
 			// Quit 
@@ -345,8 +346,8 @@ void * send_message(void *ptr) {
 				cfuhash_destroy(channel_list);
 				
 				quit = 0;
-				pthread_exit(NULL);
-				//exit(0);
+				//pthread_exit(NULL);
+				exit(0);
 				// TODO: pthread_create leaks memory
 				continue;
 			}
@@ -359,7 +360,10 @@ void * send_message(void *ptr) {
 				strcat(tx_buff, " ");
 				strcat(tx_buff, line);
 				strcat(tx_buff, "\n");
-				write(data->socket, tx_buff, strlen(tx_buff));
+				if(write(data->socket, tx_buff, strlen(tx_buff)) <= 0) {
+					printf("Write to socket failed");
+					exit(0);
+				}
 				if (current_channel->name[0] != '#') {
 					char timestamp[MAX_LENGTH];
 					get_current_time(timestamp);
@@ -474,7 +478,8 @@ void * read_socket(void *ptr) {
 				strcat(line, COLOR_CYAN);
 				strcat(line, strtok(NULL, " "));
 				strcat(line, COLOR_RESET);
-				strcat(line, " joined the channel");
+				strcat(line, " joined the channel ");
+				strcat(line, strtok(NULL, "\n"));
 			} else if (strcmp(command, "CMDREPLY") == 0) {
 				strcat(line, COLOR_RED);
 				strcat(line, "Error: ");
@@ -487,13 +492,13 @@ void * read_socket(void *ptr) {
 			printf("%s\n", line);
 			
 			if(rx_line_next != NULL) {
-                while (1) {
-                    *rx_line = *rx_line_next;
-                    if (*rx_line_next == '\0') {
-                       break; 
-                    }
-                    rx_line++; rx_line_next++;
-                }
+				while (1) {
+					*rx_line = *rx_line_next;
+					if (*rx_line_next == '\0') {
+					break; 
+					}
+				rx_line++; rx_line_next++;
+				}
 			} else {
 				read_n = 0;
 			}
