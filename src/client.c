@@ -198,7 +198,11 @@ void * send_message(void *ptr) {
 					strcat(tx_buff, channel_name);
 					strcat(tx_buff, "\n");
 					
-					write(data->socket, tx_buff, strlen(tx_buff));
+					if(write(data->socket, tx_buff, strlen(tx_buff)) <= 0) {
+						fflush(stdout);
+						printf("Write to socket failed\n");
+						exit(0);
+					}
 					continue;
 				} else {
 					printf("Illegal channel name\n");
@@ -258,7 +262,11 @@ void * send_message(void *ptr) {
 					printf("You left the channel "COLOR_CYAN"%s"COLOR_RESET"\n", current_channel->name);
 				
 					if (current_channel->name[0] == '#') {
-						write(data->socket, tx_buff, strlen(tx_buff));
+						if(write(data->socket, tx_buff, strlen(tx_buff)) <= 0) {
+							fflush(stdout);
+							printf("Write to socket failed\n");
+							exit(0);
+						}
 					}
 					
 					cfuhash_delete(channel_list, current_channel->name);
@@ -291,7 +299,11 @@ void * send_message(void *ptr) {
 				strcpy(tx_buff, "NAMES ");
 				strcat(tx_buff, current_channel->name);
 				strcat(tx_buff, "\n");
-				write(data->socket, tx_buff, strlen(tx_buff));
+				if(write(data->socket, tx_buff, strlen(tx_buff)) <= 0) {
+					fflush(stdout);
+					printf("Write to socket failed\n");
+					exit(0);
+				}
 				continue;
 			}
 			// Show my channels
@@ -353,7 +365,8 @@ void * send_message(void *ptr) {
 				strcat(tx_buff, line);
 				strcat(tx_buff, "\n");
 				if(write(data->socket, tx_buff, strlen(tx_buff)) <= 0) {
-					printf("Write to socket failed");
+					fflush(stdout);
+					printf("Write to socket failed\n");
 					exit(0);
 				}
 				if (current_channel->name[0] != '#') {
